@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>Himmelswerk</title>
+ <author><name>Himmelswerk</name></author>
+ <entry>
+  <yt:videoId>CCCCCCCCCC1</yt:videoId>
+  <title>Warum Polarlichter dieses Jahr so weit südlich zu sehen sind</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=CCCCCCCCCC1"/>
+  <published>2026-10-20T18:00:00+00:00</published>
+  <media:group>
+   <media:thumbnail url="https://i.ytimg.com/vi/CCCCCCCCCC1/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Sonnenzyklus, koronale Massenauswürfe und das Erdmagnetfeld einfach erklärt.</media:description>
+  </media:group>
+ </entry>
+</feed>

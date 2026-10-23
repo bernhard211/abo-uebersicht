@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>Werkstatt Huber</title>
+ <author><name>Werkstatt Huber</name></author>
+ <entry>
+  <yt:videoId>BBBBBBBBBB1</yt:videoId>
+  <title>Dachboden dämmen in einem Wochenende</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=BBBBBBBBBB1"/>
+  <published>2026-10-21T15:30:00+00:00</published>
+  <media:group>
+   <media:thumbnail url="https://i.ytimg.com/vi/BBBBBBBBBB1/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Von der Dampfbremse bis zur Dämmmatte – Schritt für Schritt &amp; mit typischen Fehlern.</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <yt:videoId>BBBBBBBBBB2</yt:videoId>
+  <title>Die fünf Werkzeuge, die ich wirklich jeden Tag nutze</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=BBBBBBBBBB2"/>
+  <published>2026-10-17T10:00:00+00:00</published>
+  <media:group><media:description></media:description></media:group>
+ </entry>
+</feed>

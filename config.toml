@@ -1,0 +1,20 @@
+# Einstellungen für die Abo-Übersicht
+
+# Wie viele Tage zurück gesammelt wird (die App lässt dich dann 1 bis max_days wählen)
+max_days = 7
+
+# Shorts ausblenden?
+include_shorts = false
+
+# Datei mit deinen Abos (Google-Takeout-Export, siehe README)
+subscriptions_file = "subscriptions.csv"
+
+# Themen, in die Videos einsortiert werden. Reihenfolge = Reihenfolge der Filter in der App.
+# Was nicht passt, landet unter "Sonstiges".
+topics = ["Technik", "Wissenschaft", "Heimwerken", "Kochen", "Musik", "Nachrichten", "Unterhaltung"]
+
+[llm]
+# Claude-Modell für Themen und Zusammenfassungen
+model = "claude-haiku-5-5"
+# Wie viele Videos pro Anfrage zusammengefasst werden
+batch_size = 20

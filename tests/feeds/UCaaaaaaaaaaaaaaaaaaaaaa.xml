@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>Bastelbude</title>
+ <author><name>Bastelbude</name></author>
+ <entry>
+  <yt:videoId>AAAAAAAAAA1</yt:videoId>
+  <title>Mini-PC als Heimserver: Stromverbrauch nach einem Jahr</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=AAAAAAAAAA1"/>
+  <published>2026-10-23T08:00:00+00:00</published>
+  <media:group>
+   <media:thumbnail url="https://i.ytimg.com/vi/AAAAAAAAAA1/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Ein Jahr Dauerbetrieb, gemessen mit einem Zwischenstecker. Im Leerlauf unter 10 Watt.</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <yt:videoId>AAAAAAAAAA2</yt:videoId>
+  <title>Kurzer Tipp zum Lötkolben #shorts</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/AAAAAAAAAA2"/>
+  <published>2026-10-22T08:00:00+00:00</published>
+  <media:group><media:description>Short</media:description></media:group>
+ </entry>
+ <entry>
+  <yt:videoId>AAAAAAAAAA3</yt:videoId>
+  <title>Altes Video vom letzten Monat</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=AAAAAAAAAA3"/>
+  <published>2026-09-20T08:00:00+00:00</published>
+  <media:group><media:description>Zu alt.</media:description></media:group>
+ </entry>
+</feed>
