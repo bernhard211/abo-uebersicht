@@ -11,32 +11,48 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script>
+  // Theme vor dem ersten Zeichnen setzen, damit es nicht hell aufblitzt
+  try { var t = JSON.parse(localStorage.getItem('abo.theme')); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="titlerow">
-      <div class="titles">
-        <span class="eyebrow" id="rangeLabel">&nbsp;</span>
-        <h1>Deine Abos</h1>
-        <span class="stats" id="stats">Lade …</span>
+    <div class="titles">
+      <span class="eyebrow" id="rangeLabel">&nbsp;</span>
+      <div class="titlerow">
+        <h1 id="title">Deine Abos</h1>
+        <div class="hbtns">
+        <button class="iconbtn" id="themeBtn" aria-label="Darstellung"></button>
+        <button class="iconbtn" id="savedBtn" aria-label="Merkliste" aria-pressed="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+          <span class="badge" id="savedCount" hidden></span>
+        </button>
+        <button class="iconbtn" id="refresh" aria-label="Aktualisieren">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        </button>
+        </div>
       </div>
-      <button class="iconbtn" id="refresh" aria-label="Aktualisieren">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-      </button>
+      <span class="stats" id="stats">Lade …</span>
     </div>
 
-    <div class="range" role="group" aria-label="Zeitraum in Tagen">
-      <span class="label" id="rangeText">Zeitraum</span>
-      <div class="rangebtns" id="ranges"></div>
-    </div>
+    <div id="mainControls" class="controls">
+      <div class="range" role="group" aria-label="Zeitraum in Tagen">
+        <div class="rangehead">
+          <span class="label" id="rangeText">Zeitraum</span>
+          <span class="hint">Lange drücken = abhaken</span>
+        </div>
+        <div class="rangebtns" id="ranges"></div>
+      </div>
 
-    <div class="seg" role="group" aria-label="Gruppieren nach">
-      <button data-group="thema" aria-pressed="true">Nach Thema</button>
-      <button data-group="kanal" aria-pressed="false">Nach Kanal</button>
-    </div>
+      <div class="seg" role="group" aria-label="Gruppieren nach">
+        <button data-group="kanal" aria-pressed="false">Nach Kanal</button>
+        <button data-group="thema" aria-pressed="true">Nach Thema</button>
+      </div>
 
-    <div class="chips" id="chips" role="group" aria-label="Themenfilter"></div>
+      <div class="chips" id="chips" role="group" aria-label="Themenfilter"></div>
+    </div>
   </header>
 
   <main class="list" id="list">
@@ -47,10 +63,16 @@
       </div>
       <p id="digestText"></p>
     </section>
+    <div class="toolbar" id="toolbar"></div>
     <div id="groups"></div>
     <p class="foot" id="foot"></p>
+    <p class="foot">Video nach rechts wischen = merken</p>
     <p class="foot"><a href="datenschutz.html" style="color: inherit">Datenschutz</a></p>
   </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <span id="toastText"></span>
+  <button id="toastUndo">Rückgängig</button>
 </div>
 <script src="app.js"></script>
 </body>

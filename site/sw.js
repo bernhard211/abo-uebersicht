@@ -1,5 +1,6 @@
-// App-Hülle offline verfügbar halten; data.json immer zuerst frisch aus dem Netz.
-var CACHE = 'abo-v1';
+// Immer zuerst aus dem Netz laden (so kommen App-Updates sofort an),
+// bei Funkloch die zuletzt geladene Version aus dem Zwischenspeicher.
+var CACHE = 'abo-v2';
 var SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', function (e) {
@@ -15,21 +16,12 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  if (url.pathname.endsWith('/data.json')) {
-    // Netz zuerst, bei Funkloch die letzte Version
-    e.respondWith(fetch(e.request).then(function (r) {
-      var copy = r.clone();
-      caches.open(CACHE).then(function (c) { c.put('data.json', copy); });
-      return r;
-    }).catch(function () { return caches.match('data.json'); }));
-    return;
-  }
-  e.respondWith(caches.match(e.request).then(function (hit) {
-    var net = fetch(e.request).then(function (r) {
-      var copy = r.clone();
-      caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
-      return r;
-    });
-    return hit || net;
+  // data.json?t=… immer unter demselben Schlüssel ablegen
+  var key = url.pathname.endsWith('/data.json') ? 'data.json' : e.request;
+  e.respondWith(fetch(e.request).then(function (r) {
+    if (r.ok) { var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put(key, copy); }); }
+    return r;
+  }).catch(function () {
+    return caches.match(key).then(function (hit) { return hit || caches.match('index.html'); });
   }));
 });
