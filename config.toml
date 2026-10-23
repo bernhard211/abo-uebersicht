@@ -20,4 +20,4 @@ topics = []
 # Claude-Modell für Themen und Zusammenfassungen
 model = "claude-haiku-5-5"
 # Wie viele Videos pro Anfrage zusammengefasst werden
-batch_size = 20
+batch_size = 15

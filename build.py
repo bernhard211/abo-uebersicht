@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import tomllib
 import urllib.parse
@@ -192,7 +193,12 @@ def fetch_durations(ids: list[str], key: str | None = None, token: str | None = 
 
 # ---------------------------------------------------------------- Claude
 
+class ClaudeError(Exception):
+    pass
+
+
 def extract_json(text: str):
+    """Nur als Rückfall, falls die Antwort doch nicht reines JSON ist."""
     m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
     if m:
         text = m.group(1)
@@ -200,12 +206,32 @@ def extract_json(text: str):
     return json.loads(text[start:])
 
 
-def claude_call(client, model: str, system: str, user: str, max_tokens: int = 4000) -> str:
+def claude_json(client, model: str, user: str, schema: dict, max_tokens: int = 16000,
+                system: str = "Antworte ausschließlich mit JSON nach dem vorgegebenen Schema."):
+    """Fragt Claude und bekommt garantiert JSON nach `schema` zurück (Structured Outputs).
+
+    Das Nachdenken (adaptive thinking) wird abgeschaltet: Es verbraucht sonst das Antwortbudget
+    und schneidet die Antwort ab. Über extra_body, damit es mit jeder SDK-Version funktioniert.
+    """
+    extra = {
+        "thinking": {"type": "disabled"},
+        "output_config": {"format": {"type": "json_schema", "schema": schema}},
+    }
     resp = client.messages.create(
         model=model, max_tokens=max_tokens, system=system,
         messages=[{"role": "user", "content": user}],
+        extra_body=extra,
     )
-    return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+    stop = getattr(resp, "stop_reason", None)
+    text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+    if stop in ("max_tokens", "refusal"):
+        raise ClaudeError(f"Antwort unvollständig (stop_reason={stop})")
+    if not text.strip():
+        raise ClaudeError(f"leere Antwort (stop_reason={stop})")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return extract_json(text)
 
 
 TOPICS_FILE = ROOT / "data" / "topics.json"
@@ -226,58 +252,103 @@ def derive_topics(client, cfg: dict, subs: list[dict], videos: list[dict]) -> li
         "Schlage 6 bis 10 Themen vor, mit denen sich diese Videos sinnvoll gruppieren lassen. "
         "Kurze deutsche Bezeichnungen (1–2 Wörter), klar voneinander abgegrenzt, so konkret wie möglich "
         "(lieber \"Elektronik\" und \"Software\" als nur \"Technik\", wenn beides viel vorkommt). "
-        "Kein \"Sonstiges\". Sortiert nach Häufigkeit.\nAntwort: JSON-Array von Strings."
+        "Kein \"Sonstiges\". Sortiert nach Häufigkeit."
     )
+    schema = {
+        "type": "object",
+        "properties": {"themen": {"type": "array", "items": {"type": "string"}}},
+        "required": ["themen"],
+        "additionalProperties": False,
+    }
     try:
-        raw = extract_json(claude_call(client, cfg["llm"]["model"],
-                                       "Antworte ausschließlich mit gültigem JSON.", user, 500))
-        topics = [str(t).strip() for t in raw if str(t).strip() and str(t).strip() != FALLBACK_TOPIC][:10]
+        raw = claude_json(client, cfg["llm"]["model"], user, schema, 2000)["themen"]
+        topics = []
+        for t in raw:
+            t = str(t).strip()
+            if t and t.lower() != FALLBACK_TOPIC.lower() and t not in topics:
+                topics.append(t)
+        topics = topics[:10]
     except Exception as e:  # noqa: BLE001
-        log(f"  ! Themen ableiten: {e} – nutze Standardliste")
+        log(f"  ! Themen ableiten: {e} – nutze Standardliste (nächster Lauf versucht es erneut)")
         return DEFAULT_TOPICS
-    if topics:
-        TOPICS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        TOPICS_FILE.write_text(json.dumps({"topics": topics}, ensure_ascii=False, indent=1), "utf-8")
-        log(f"Themen abgeleitet: {', '.join(topics)}")
-    return topics or DEFAULT_TOPICS
+    if not topics:
+        return DEFAULT_TOPICS
+    TOPICS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TOPICS_FILE.write_text(json.dumps({"topics": topics}, ensure_ascii=False, indent=1), "utf-8")
+    log(f"Themen abgeleitet: {', '.join(topics)}")
+    return topics
 
 
 def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None:
     topics = cfg["topics"]
     sig = "|".join(topics)
+    allowed = topics + [FALLBACK_TOPIC]
+    by_lower = {t.lower(): t for t in allowed}
     # Neu einsortieren, wenn sich die Themenliste geändert hat
     todo = [v for v in videos if cache.get(v["id"], {}).get("sig") != sig]
     if not todo:
         return
-    system = (
-        "Du ordnest YouTube-Videos Themen zu und fasst sie auf Deutsch zusammen. "
-        "Antworte ausschließlich mit gültigem JSON."
-    )
-    bs = cfg["llm"].get("batch_size", 20)
-    for i in range(0, len(todo), bs):
-        batch = todo[i:i + bs]
+    schema = {
+        "type": "object",
+        "properties": {
+            "videos": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "thema": {"type": "string", "enum": allowed},
+                        "zusammenfassung": {"type": "string"},
+                    },
+                    "required": ["id", "thema", "zusammenfassung"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["videos"],
+        "additionalProperties": False,
+    }
+    stats = {"ok": 0, "fail": 0}
+    lock = threading.Lock()
+
+    def run(batch: list[dict]) -> None:
         items = [{"id": v["id"], "kanal": v["channel"], "titel": v["title"],
-                  "beschreibung": v["description"][:1500]} for v in batch]
+                  "beschreibung": v["description"][:1200]} for v in batch]
         user = (
-            f"Erlaubte Themen: {json.dumps(topics, ensure_ascii=False)} – passt keines, nimm \"{FALLBACK_TOPIC}\".\n"
-            "Gib für jedes Video ein Objekt {\"id\", \"thema\", \"zusammenfassung\"} zurück. "
-            "Die Zusammenfassung: 2–3 sachliche Sätze, worum es geht und was man mitnimmt. "
-            "Keine Werbung, Sponsoren oder Links aus der Beschreibung übernehmen. "
+            f"Ordne jedes Video genau einem dieser Themen zu: {json.dumps(topics, ensure_ascii=False)}. "
+            f"Nur wenn wirklich keines passt: \"{FALLBACK_TOPIC}\".\n"
+            "Schreibe zu jedem Video eine Zusammenfassung auf Deutsch: 2–3 sachliche Sätze, worum es geht "
+            "und was man mitnimmt. Keine Werbung, Sponsoren oder Links aus der Beschreibung übernehmen. "
             "Wenn die Beschreibung kaum Inhalt hat, schreibe ehrlich nur, was der Titel erkennen lässt.\n\n"
-            f"Videos:\n{json.dumps(items, ensure_ascii=False, indent=1)}\n\n"
-            "Antwort: ein JSON-Array."
+            f"Videos:\n{json.dumps(items, ensure_ascii=False, indent=1)}"
         )
         try:
-            result = extract_json(claude_call(client, cfg["llm"]["model"], system, user))
-        except Exception as e:  # noqa: BLE001 – nächster Lauf versucht es erneut
-            log(f"  ! Zusammenfassung Block {i // bs + 1}: {e}")
-            continue
+            result = claude_json(client, cfg["llm"]["model"], user, schema)["videos"]
+        except Exception as e:  # noqa: BLE001
+            if len(batch) > 1:  # halbieren und nochmal
+                mid = len(batch) // 2
+                run(batch[:mid])
+                run(batch[mid:])
+            else:
+                with lock:
+                    stats["fail"] += 1
+                log(f"  ! Zusammenfassung {batch[0]['id']}: {e}")
+            return
+        ids = {v["id"] for v in batch}
         for r in result:
             vid = r.get("id")
-            if vid:
-                topic = r.get("thema") if r.get("thema") in topics else FALLBACK_TOPIC
-                cache[vid] = {"topic": topic, "summary": str(r.get("zusammenfassung", "")).strip(), "sig": sig}
-        log(f"  Zusammengefasst: {min(i + bs, len(todo))}/{len(todo)}")
+            if vid in ids:
+                topic = by_lower.get(str(r.get("thema", "")).strip().lower(), FALLBACK_TOPIC)
+                with lock:
+                    cache[vid] = {"topic": topic, "summary": str(r.get("zusammenfassung", "")).strip(), "sig": sig}
+                    stats["ok"] += 1
+
+    bs = cfg["llm"].get("batch_size", 15)
+    batches = [todo[i:i + bs] for i in range(0, len(todo), bs)]
+    # 4 Anfragen parallel – schneller, aber weit unter den API-Ratenlimits
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for _ in ex.map(run, batches):
+            log(f"  Zusammengefasst: {stats['ok']}/{len(todo)}" + (f" ({stats['fail']} fehlgeschlagen)" if stats["fail"] else ""))
 
 
 def make_digests(client, cfg: dict, videos: list[dict], now: dt.datetime) -> dict[str, str]:
@@ -286,20 +357,24 @@ def make_digests(client, cfg: dict, videos: list[dict], now: dt.datetime) -> dic
         return {}
     items = [{"tage_alt": round((now - parse_time(v["published"])).total_seconds() / 86400, 1),
               "kanal": v["channel"], "titel": v["title"], "thema": v["topic"]} for v in videos]
-    days = list(range(1, cfg["max_days"] + 1))
+    days = [str(d) for d in range(1, cfg["max_days"] + 1)]
     user = (
         f"Hier sind neue Videos aus meinen Abos (tage_alt = vor wie vielen Tagen erschienen):\n"
-        f"{json.dumps(items, ensure_ascii=False, indent=1)}\n\n"
-        f"Schreibe für jeden Zeitraum {days} (= alle Videos mit tage_alt <= Zeitraum) einen kurzen "
-        "Überblick auf Deutsch, 2–3 Sätze, locker und konkret: Schwerpunkte, auffällige Kanäle, "
+        f"{json.dumps(items, ensure_ascii=False, indent=0)}\n\n"
+        f"Schreibe für jeden Zeitraum {', '.join(days)} Tage (= alle Videos mit tage_alt <= Zeitraum) einen "
+        "kurzen Überblick auf Deutsch, 2–3 Sätze, locker und konkret: Schwerpunkte, auffällige Kanäle "
         "und welches Video sich am meisten lohnt. Keine Aufzählung aller Titel. "
-        "Gibt es in einem Zeitraum keine Videos, lass ihn weg.\n"
-        "Antwort: JSON-Objekt {\"1\": \"...\", \"2\": \"...\", ...}."
+        "Gibt es in einem Zeitraum keine Videos, schreibe einen leeren Text."
     )
+    schema = {
+        "type": "object",
+        "properties": {d: {"type": "string"} for d in days},
+        "required": days,
+        "additionalProperties": False,
+    }
     try:
-        data = extract_json(claude_call(client, cfg["llm"]["model"],
-                                        "Antworte ausschließlich mit gültigem JSON.", user, 3000))
-        return {str(k): str(v) for k, v in data.items() if str(k).isdigit()}
+        data = claude_json(client, cfg["llm"]["model"], user, schema, 8000)
+        return {k: str(v).strip() for k, v in data.items() if k in days and str(v).strip()}
     except Exception as e:  # noqa: BLE001
         log(f"  ! Überblick: {e}")
         return {}
