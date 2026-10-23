@@ -9,9 +9,12 @@ include_shorts = false
 # Datei mit deinen Abos (Google-Takeout-Export, siehe README)
 subscriptions_file = "subscriptions.csv"
 
-# Themen, in die Videos einsortiert werden. Reihenfolge = Reihenfolge der Filter in der App.
+# Themen, in die Videos einsortiert werden.
+# Leer lassen = Claude leitet beim ersten Lauf passende Themen aus deinen Abos ab und merkt sie sich.
+# Eigene Liste eintragen = genau diese Themen, in dieser Reihenfolge als Filter in der App, z. B.:
+#   topics = ["Technik", "Wissenschaft", "Heimwerken", "Kochen", "Musik"]
 # Was nicht passt, landet unter "Sonstiges".
-topics = ["Technik", "Wissenschaft", "Heimwerken", "Kochen", "Musik", "Nachrichten", "Unterhaltung"]
+topics = []
 
 [llm]
 # Claude-Modell für Themen und Zusammenfassungen

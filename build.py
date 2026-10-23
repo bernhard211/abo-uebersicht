@@ -208,9 +208,45 @@ def claude_call(client, model: str, system: str, user: str, max_tokens: int = 40
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
 
 
+TOPICS_FILE = ROOT / "data" / "topics.json"
+DEFAULT_TOPICS = ["Technik", "Wissenschaft", "Nachrichten", "Unterhaltung", "Musik", "Gaming"]
+
+
+def derive_topics(client, cfg: dict, subs: list[dict], videos: list[dict]) -> list[str]:
+    """Einmalig passende Themen aus den abonnierten Kanälen ableiten und merken."""
+    if TOPICS_FILE.exists():
+        saved = json.loads(TOPICS_FILE.read_text("utf-8")).get("topics") or []
+        if saved:
+            return saved
+    channels = sorted({s["title"] for s in subs if s.get("title")} | {v["channel"] for v in videos})[:500]
+    examples = [f'{v["channel"]}: {v["title"]}' for v in videos[:150]]
+    user = (
+        f"Das sind die YouTube-Kanäle, die ich abonniert habe:\n{json.dumps(channels, ensure_ascii=False)}\n\n"
+        f"Beispiele aktueller Videos:\n{json.dumps(examples, ensure_ascii=False, indent=0)}\n\n"
+        "Schlage 6 bis 10 Themen vor, mit denen sich diese Videos sinnvoll gruppieren lassen. "
+        "Kurze deutsche Bezeichnungen (1–2 Wörter), klar voneinander abgegrenzt, so konkret wie möglich "
+        "(lieber \"Elektronik\" und \"Software\" als nur \"Technik\", wenn beides viel vorkommt). "
+        "Kein \"Sonstiges\". Sortiert nach Häufigkeit.\nAntwort: JSON-Array von Strings."
+    )
+    try:
+        raw = extract_json(claude_call(client, cfg["llm"]["model"],
+                                       "Antworte ausschließlich mit gültigem JSON.", user, 500))
+        topics = [str(t).strip() for t in raw if str(t).strip() and str(t).strip() != FALLBACK_TOPIC][:10]
+    except Exception as e:  # noqa: BLE001
+        log(f"  ! Themen ableiten: {e} – nutze Standardliste")
+        return DEFAULT_TOPICS
+    if topics:
+        TOPICS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        TOPICS_FILE.write_text(json.dumps({"topics": topics}, ensure_ascii=False, indent=1), "utf-8")
+        log(f"Themen abgeleitet: {', '.join(topics)}")
+    return topics or DEFAULT_TOPICS
+
+
 def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None:
     topics = cfg["topics"]
-    todo = [v for v in videos if v["id"] not in cache]
+    sig = "|".join(topics)
+    # Neu einsortieren, wenn sich die Themenliste geändert hat
+    todo = [v for v in videos if cache.get(v["id"], {}).get("sig") != sig]
     if not todo:
         return
     system = (
@@ -240,7 +276,7 @@ def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None
             vid = r.get("id")
             if vid:
                 topic = r.get("thema") if r.get("thema") in topics else FALLBACK_TOPIC
-                cache[vid] = {"topic": topic, "summary": str(r.get("zusammenfassung", "")).strip()}
+                cache[vid] = {"topic": topic, "summary": str(r.get("zusammenfassung", "")).strip(), "sig": sig}
         log(f"  Zusammengefasst: {min(i + bs, len(todo))}/{len(todo)}")
 
 
@@ -338,6 +374,8 @@ def main() -> int:
     if os.environ.get("ANTHROPIC_API_KEY"):
         import anthropic
         client = anthropic.Anthropic()
+        if not cfg.get("topics"):
+            cfg["topics"] = derive_topics(client, cfg, subs, videos)
         summarize_videos(client, cfg, videos, cache)
         for v in videos:
             v["topic"] = cache.get(v["id"], {}).get("topic", FALLBACK_TOPIC)
@@ -364,7 +402,7 @@ def main() -> int:
     CACHE_FILE.write_text(json.dumps({k: v for k, v in cache.items() if k in keep},
                                      ensure_ascii=False, indent=1), "utf-8")
 
-    topics_used = [t for t in cfg["topics"] + [FALLBACK_TOPIC] if any(v["topic"] == t for v in out_videos)]
+    topics_used = [t for t in (cfg.get("topics") or []) + [FALLBACK_TOPIC] if any(v["topic"] == t for v in out_videos)]
     data = {
         "generated": now.isoformat(),
         "max_days": cfg["max_days"],
