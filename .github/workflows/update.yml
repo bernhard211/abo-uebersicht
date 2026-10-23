@@ -1,0 +1,65 @@
+name: Übersicht aktualisieren
+
+on:
+  schedule:
+    - cron: "17 4 * * *"   # täglich ~06:17 Uhr deutscher Sommerzeit (Cron läuft in UTC)
+  workflow_dispatch:        # manuell starten: Actions › Übersicht aktualisieren › Run workflow
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      # Nur als Ersatz, falls kein Google-Login eingerichtet ist: Takeout-Liste aus einem Secret
+      - name: Ersatz-Abo-Liste bereitstellen
+        env:
+          SUBSCRIPTIONS_CSV: ${{ secrets.SUBSCRIPTIONS_CSV }}
+        run: |
+          if [ -n "$SUBSCRIPTIONS_CSV" ]; then printf '%s\n' "$SUBSCRIPTIONS_CSV" > subscriptions.csv; fi
+
+      # Bereits erstellte Zusammenfassungen wiederverwenden (spart API-Kosten)
+      - uses: actions/cache@v4
+        with:
+          path: data/cache.json
+          key: summaries-${{ github.run_id }}
+          restore-keys: summaries-
+
+      - name: Übersicht bauen
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+        run: python build.py
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
