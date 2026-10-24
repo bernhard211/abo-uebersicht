@@ -23,7 +23,8 @@
     order: store.get('order', { thema: [], kanal: [] }),
     saved: store.get('saved', {}),                     // id -> Video (+ savedAt)
     done: store.get('done', []),                       // abgehakte Kalendertage 'YYYY-MM-DD'
-    theme: store.get('theme', 'auto')                  // 'auto' | 'dark' | 'light'
+    theme: store.get('theme', 'auto'),                 // 'auto' | 'dark' | 'light'
+    digestOpen: store.get('digestOpen', true)          // "Kurz gesagt" auf- oder zugeklappt
   };
   if (!state.order.thema) state.order.thema = [];
   if (!state.order.kanal) state.order.kanal = [];
@@ -103,8 +104,9 @@
   if (mq && mq.addEventListener) mq.addEventListener('change', applyTheme);
 
   // ---------------------------------------------------------------- Hilfen
+  // Ganze Kalendertage: 0 = heute ab 0 Uhr, 1 = ab gestern 0 Uhr, …
   function inRange(v) {
-    return Date.now() - Date.parse(v.published) <= state.range * 86400000;
+    return Date.parse(v.published) >= dayOf(state.range).getTime();
   }
   function visibleVideos() {
     return data.videos.filter(function (v) {
@@ -161,10 +163,10 @@
   // ---------------------------------------------------------------- Zeichnen
   function rangeBtnHtml(d) {
     var day = dayOf(d), done = isDone(d);
-    return '<button data-range="' + d + '" class="' + (done ? 'done' : '') + '" aria-pressed="' + (state.range === d) + '" aria-label="' +
-      (d === 1 ? 'Letzter Tag' : 'Letzte ' + d + ' Tage') + ', bis ' + WD_LONG[day.getDay()] + ' ' + day.getDate() + '. ' + MONTHS[day.getMonth()] +
-      (done ? ', abgehakt' : '') + '">' +
-      '<span class="num">' + d + '</span><span class="wd">' + WD[day.getDay()] + '</span>' +
+    var when = WD_LONG[day.getDay()] + ' ' + day.getDate() + '. ' + MONTHS[day.getMonth()];
+    return '<button data-range="' + d + '" class="' + (done ? 'done' : '') + (d === 0 ? ' today' : '') + '" aria-pressed="' + (state.range === d) + '" aria-label="' +
+      (d === 0 ? 'Heute, ' + when : 'Ab ' + when + ' bis heute') + (done ? ', abgehakt' : '') + '">' +
+      '<span class="num">' + (d === 0 ? 'Heute' : d) + '</span><span class="wd">' + WD[day.getDay()] + '</span>' +
       (done ? '<span class="check">' + CHECK + '</span>' : '') + '</button>';
   }
 
@@ -184,12 +186,14 @@
     $('title').textContent = 'Deine Abos';
     var max = data ? data.max_days : 7;
     var html = '';
-    for (var d = 1; d <= max; d++) html += rangeBtnHtml(d);
+    for (var d = 0; d <= max; d++) html += rangeBtnHtml(d);
     $('ranges').innerHTML = html;
-    $('ranges').style.gridTemplateColumns = 'repeat(' + max + ', minmax(0, 1fr))';
-    $('rangeText').textContent = 'Zeitraum: ' + (state.range === 1 ? 'letzter Tag' : 'letzte ' + state.range + ' Tage');
-    $('rangeLabel').textContent = (state.range === 1 ? 'Letzte 24 Stunden' : 'Letzte ' + state.range + ' Tage') +
-      ' · ' + fmtSpan(dayOf(state.range), new Date());
+    $('ranges').style.gridTemplateColumns = 'minmax(0, 1.45fr) repeat(' + max + ', minmax(0, 1fr))';
+    var r = state.range, today = new Date();
+    $('rangeText').textContent = 'Zeitraum: ' + (r === 0 ? 'heute' : r === 1 ? 'gestern + heute' : 'letzte ' + r + ' Tage + heute');
+    $('rangeLabel').textContent = r === 0
+      ? 'Heute · ' + WD[today.getDay()] + ' ' + today.getDate() + '. ' + MONTHS[today.getMonth()]
+      : fmtSpan(dayOf(r), today);
 
     document.querySelectorAll('.seg button').forEach(function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.group === state.group));
@@ -257,12 +261,20 @@
     if (secs) stats += ' · ' + totalLabel(secs);
     $('stats').textContent = stats;
 
+    // "Kurz gesagt" nur für abgeschlossene Tage (bis gestern), nicht für "Heute"
     var digest = '';
-    if (vids.length) {
-      digest = state.filter === 'Alle' && data.digests && data.digests[String(state.range)]
-        ? data.digests[String(state.range)] : fallbackDigest(vids);
+    if (state.range >= 1) {
+      var todayStart = startOfToday().getTime();
+      var past = vids.filter(function (v) { return Date.parse(v.published) < todayStart; });
+      if (past.length) {
+        digest = state.filter === 'Alle' && data.digests && data.digests[String(state.range)]
+          ? data.digests[String(state.range)] : fallbackDigest(past);
+      }
     }
     $('digest').hidden = !digest || state.editing;
+    $('digest').classList.toggle('closed', !state.digestOpen);
+    $('digestToggle').setAttribute('aria-expanded', String(state.digestOpen));
+    $('digestText').hidden = !state.digestOpen;
     $('digestText').textContent = digest;
 
     var key = state.group === 'thema' ? 'topic' : 'channel';
@@ -376,6 +388,9 @@
     var ds = b.dataset;
     if (b.id === 'toastUndo') { var f = undoFn; $('toast').hidden = true; undoFn = null; if (f) f(); return; }
     if (b.id === 'refresh') { load(); return; }
+    if (b.id === 'digestToggle') {
+      state.digestOpen = !state.digestOpen; store.set('digestOpen', state.digestOpen); renderList(); return;
+    }
     if (b.id === 'themeBtn') {
       state.theme = { auto: 'dark', dark: 'light', light: 'auto' }[state.theme];
       store.set('theme', state.theme); applyTheme(); return;
