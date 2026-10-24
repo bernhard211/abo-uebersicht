@@ -257,6 +257,7 @@
     $('savedBtn').hidden = locked;
     $('refresh').hidden = locked;
     $('lockBtn').hidden = locked || !encPayload;
+    $('backup').hidden = locked;
     $('mainControls').hidden = state.view === 'saved' || locked;
     if (locked) {
       $('rangeLabel').innerHTML = '&nbsp;';
@@ -617,6 +618,8 @@
     var ds = b.dataset;
     if (b.id === 'toastUndo') { var f = undoFn; $('toast').hidden = true; undoFn = null; if (f) f(); return; }
     if (b.id === 'refresh') { load(); return; }
+    if (ds.act === 'export') { exportBackup(); return; }
+    if (ds.act === 'import') { $('backupFile').click(); return; }
     if (ds.act === 'lock') { store.set('key', null); state.view = 'main'; showLock(); window.scrollTo(0, 0); return; }
     if (b.id === 'digestToggle') {
       state.digestOpen = !state.digestOpen; store.set('digestOpen', state.digestOpen); renderList(); return;
@@ -818,6 +821,65 @@
   });
   document.addEventListener('keydown', function (e) {
     if (sheet && e.key === 'Escape') closeSheet();
+  });
+
+  // ---------------------------------------------------------------- Sichern und Wiederherstellen
+  // Alles, was nur auf diesem Gerät liegt – ohne den Passwort-Schlüssel
+  var BACKUP_KEYS = {
+    lists: 'array', listColors: 'object', chan: 'object', saved: 'object',
+    done: 'array', order: 'object', sort: 'string', theme: 'string', digestOpen: 'boolean'
+  };
+  function typeOk(v, t) { return t === 'array' ? Array.isArray(v) : (t === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === t); }
+  function backupData() {
+    var out = {};
+    Object.keys(BACKUP_KEYS).forEach(function (k) { out[k] = state[k]; });
+    return out;
+  }
+  function applyBackup(d) {
+    Object.keys(BACKUP_KEYS).forEach(function (k) {
+      if (typeOk(d[k], BACKUP_KEYS[k])) { state[k] = d[k]; store.set(k, d[k]); }
+    });
+    if (!state.order.kanal) state.order.kanal = [];
+    if (state.lists.indexOf(state.list) < 0) state.list = 'Alle';
+    applyTheme();
+    render();
+  }
+  function exportBackup() {
+    var now = new Date();
+    var file = { app: 'abo-uebersicht', v: 1, exported: now.toISOString(), data: backupData() };
+    var blob = new Blob([JSON.stringify(file, null, 1)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'abo-uebersicht-sicherung-' + dayKey(now) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+    var n = state.lists.length, m = Object.keys(state.saved).length;
+    toast('Gesichert: ' + plural(n, 'Liste', 'Listen') + ', ' + plural(m, 'gemerktes Video', 'gemerkte Videos'));
+  }
+  function importBackup(f) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var file;
+      try { file = JSON.parse(reader.result); } catch (e) { file = null; }
+      if (!file || file.app !== 'abo-uebersicht' || !typeOk(file.data, 'object')) {
+        toast('Das ist keine Sicherung dieser App.');
+        return;
+      }
+      var before = JSON.parse(JSON.stringify(backupData()));
+      applyBackup(file.data);
+      var when = file.exported ? new Date(file.exported).toLocaleDateString('de-DE') : '';
+      toast('Wiederhergestellt' + (when ? ' (Stand ' + when + ')' : ''), function () { applyBackup(before); });
+    };
+    reader.onerror = function () { toast('Datei konnte nicht gelesen werden.'); };
+    reader.readAsText(f);
+  }
+  $('backupFile').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (f) importBackup(f);
+    this.value = '';
   });
 
   $('showPw').addEventListener('change', function () { $('pw').type = this.checked ? 'text' : 'password'; });
