@@ -2,7 +2,7 @@ name: Übersicht aktualisieren
 
 on:
   schedule:
-    - cron: "17 4 * * *"   # täglich ~06:17 Uhr deutscher Sommerzeit (Cron läuft in UTC)
+    - cron: "17 8-23/2 * * *"   # alle 2 Std. ab ca. 9–10 Uhr bis ca. 0–1 Uhr, passt für Sommer- und Winterzeit
   workflow_dispatch:        # manuell starten: Actions › Übersicht aktualisieren › Run workflow
 
 permissions:
