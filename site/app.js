@@ -33,7 +33,10 @@
     hideSeen: store.get('hideSeen', false),            // gesehene Videos ausblenden
     q: '',                                             // Suchbegriff
     dur: 'alle',                                       // Dauer-Filter: alle | kurz | mittel | lang
-    showMuted: false                                   // stummgeschaltete Kanäle trotzdem zeigen
+    showMuted: false,                                  // stummgeschaltete Kanäle trotzdem zeigen
+    savedSort: store.get('savedSort', 'gemerkt'),      // Merkliste: gemerkt | kurz | lang | kanal | eigene
+    savedOrder: store.get('savedOrder', []),           // eigene Reihenfolge der Merkliste (Video-IDs)
+    savedEditing: false
   };
   // "Neu seit dem letzten Besuch": IDs, die beim Start dieser Sitzung schon bekannt waren
   var sessionPrev = null;
@@ -227,6 +230,36 @@
     return Object.keys(state.saved).map(function (k) { return state.saved[k]; })
       .sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
   }
+  // Ganze Merkliste in eigener Reihenfolge: neu Gemerktes, das noch nicht einsortiert ist, oben
+  function savedOwnOrder() {
+    var all = savedList(), pos = {};
+    state.savedOrder.forEach(function (id, i) { pos[id] = i; });
+    var fresh = all.filter(function (v) { return !(v.id in pos); });
+    var known = all.filter(function (v) { return v.id in pos; }).sort(function (a, b) { return pos[a.id] - pos[b.id]; });
+    return fresh.concat(known);
+  }
+  function sortedSaved() {
+    var list = state.savedSort === 'eigene' ? savedOwnOrder() : savedList();
+    var bySec = function (dir) {
+      return function (a, b) {
+        if (!a.seconds && !b.seconds) return 0;
+        if (!a.seconds) return 1;
+        if (!b.seconds) return -1;
+        return dir * (a.seconds - b.seconds);
+      };
+    };
+    if (state.savedSort === 'kurz') list.sort(bySec(1));
+    else if (state.savedSort === 'lang') list.sort(bySec(-1));
+    else if (state.savedSort === 'kanal') list.sort(function (a, b) { return a.channel.localeCompare(b.channel, 'de') || (b.savedAt || 0) - (a.savedAt || 0); });
+    return list.filter(inList);
+  }
+  // Neue Reihenfolge der sichtbaren Videos übernehmen; ausgefilterte behalten ihren Platz
+  function applySavedOrder(visibleIds) {
+    var vis = {}, queue = visibleIds.slice();
+    visibleIds.forEach(function (id) { vis[id] = 1; });
+    state.savedOrder = savedOwnOrder().map(function (v) { return vis[v.id] ? queue.shift() : v.id; });
+    store.set('savedOrder', state.savedOrder);
+  }
   function findVideo(id) {
     if (data) for (var i = 0; i < data.videos.length; i++) if (data.videos[i].id === id) return data.videos[i];
     return state.saved[id] || null;
@@ -300,7 +333,9 @@
     $('refresh').hidden = locked;
     $('lockBtn').hidden = locked || !encPayload;
     $('backup').hidden = locked;
-    $('mainControls').hidden = state.view === 'saved' || locked;
+    $('mainControls').hidden = locked;
+    $('rangeBox').hidden = state.view === 'saved';
+    renderListChips();
     if (locked) {
       $('rangeLabel').innerHTML = '&nbsp;';
       $('title').textContent = 'Deine Abos';
@@ -324,7 +359,8 @@
     $('rangeLabel').textContent = r === 0
       ? 'Heute · ' + WD[today.getDay()] + ' ' + today.getDate() + '. ' + MONTHS[today.getMonth()]
       : fmtSpan(dayOf(r), today);
-
+  }
+  function renderListChips() {
     if (state.list !== 'Alle' && state.lists.indexOf(state.list) < 0) state.list = 'Alle';
     $('lists').innerHTML = ['Alle'].concat(state.lists).map(function (l) {
       return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : dot(listColor(l)) + esc(l)) + '</button>';
@@ -364,19 +400,67 @@
       '<button class="tbtn" data-act="expandall">' + (anyOpen ? 'Alle zu' : 'Alle auf') + '</button>';
   }
 
+  var SAVED_SORTS = [
+    { id: 'gemerkt', label: 'Zuletzt gemerkt' }, { id: 'kurz', label: 'Kürzeste zuerst' },
+    { id: 'lang', label: 'Längste zuerst' }, { id: 'kanal', label: 'Nach Kanal' }, { id: 'eigene', label: 'Eigene' }
+  ];
   function renderSaved() {
-    var list = savedList(), secs = 0;
+    var total = Object.keys(state.saved).length;
+    var list = sortedSaved(), secs = 0;
     list.forEach(function (v) { secs += v.seconds || 0; });
-    $('stats').textContent = plural(list.length, 'Video', 'Videos') + (secs ? ' · ' + totalLabel(secs) : '');
+    $('stats').textContent = plural(list.length, 'Video', 'Videos') + (secs ? ' · ' + totalLabel(secs) : '') +
+      (list.length < total ? ' (von ' + total + ')' : '');
     $('digest').hidden = true;
     $('filters').hidden = true;
-    renderToolbar(false);
+
+    var tb = $('toolbar');
+    tb.hidden = !total;
+    tb.innerHTML = state.savedEditing
+      ? '<span class="label" style="font-size:13px;color:var(--ink2)">Am Griff ziehen oder Pfeile nutzen</span><span class="spacer"></span><button class="tbtn primary" data-act="sedit">Fertig</button>'
+      : '<div class="chips sortchips" role="group" aria-label="Sortierung der Merkliste">' + SAVED_SORTS.map(function (o) {
+          return '<button data-ssort="' + o.id + '" aria-pressed="' + (state.savedSort === o.id) + '">' + o.label + '</button>';
+        }).join('') + '</div>' +
+        (state.savedSort === 'eigene' && list.length > 1 ? '<button class="tbtn" data-act="sedit">' + GRIP.replace('width="20" height="20"', 'width="16" height="16"') + 'Ordnen</button>' : '');
+
     var html = '<button class="tbtn backbtn" data-act="back">← Zurück zur Übersicht</button>';
-    html += list.length
-      ? '<div class="cards">' + list.map(function (v) { return cardHtml(v, true); }).join('') + '</div>'
-      : '<div class="empty"><h2>Noch nichts gemerkt</h2><p>Wische ein Video in der Übersicht nach rechts oder tippe auf das Lesezeichen.</p></div>';
+    if (!total) {
+      html += '<div class="empty"><h2>Noch nichts gemerkt</h2><p>Wische ein Video in der Übersicht nach rechts oder tippe auf das Lesezeichen.</p></div>';
+    } else if (!list.length) {
+      html += '<div class="empty"><h2>Keine gemerkten Videos in dieser Liste</h2><p>Wähle oben „Alle Kanäle“ oder eine andere Liste.</p></div>';
+    } else if (state.savedEditing) {
+      html += '<div class="srows" id="srows">' + list.map(function (v, i) {
+        return '<div class="srow" data-sid="' + esc(v.id) + '">' +
+          '<span class="handle" data-shandle="1" aria-hidden="true">' + GRIP + '</span>' +
+          '<div class="sthumb">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' : '') + '</div>' +
+          '<div class="stext"><span class="stitle">' + esc(v.title) + '</span><span class="schan">' + dotHtml(v.channel_id) + esc(v.channel) +
+          (v.seconds ? ' · ' + durLabel(v.seconds) : '') + '</span></div>' +
+          '<div class="lmoves">' +
+          '<button class="lmove" data-smove="' + esc(v.id) + '" data-dir="-1" aria-label="Nach oben"' + (i === 0 ? ' disabled' : '') + '>' + ARROW_UP + '</button>' +
+          '<button class="lmove" data-smove="' + esc(v.id) + '" data-dir="1" aria-label="Nach unten"' + (i === list.length - 1 ? ' disabled' : '') + '>' + ARROW_DOWN + '</button>' +
+          '</div></div>';
+      }).join('') + '</div>';
+    } else if (state.savedSort === 'kanal') {
+      var groups = [], idx = {};
+      list.forEach(function (v) {
+        if (!(v.channel in idx)) { idx[v.channel] = groups.length; groups.push({ name: v.channel, cid: v.channel_id, items: [] }); }
+        groups[idx[v.channel]].items.push(v);
+      });
+      html += groups.map(function (g) {
+        return '<section class="sgroup"><h3 class="shead">' + dotHtml(g.cid) + esc(g.name) + '<span>' + plural(g.items.length, 'Video', 'Videos') + '</span></h3>' +
+          '<div class="cards">' + g.items.map(function (v) { return cardHtml(v, true); }).join('') + '</div></section>';
+      }).join('');
+    } else {
+      html += '<div class="cards">' + list.map(function (v) { return cardHtml(v, true); }).join('') + '</div>';
+    }
     $('groups').innerHTML = html;
-    $('foot').textContent = list.length ? 'Zum Entfernen zur Seite wischen' : '';
+    $('foot').textContent = list.length && !state.savedEditing ? 'Zum Entfernen zur Seite wischen' : '';
+    // Gewählte Sortierung in der seitlich scrollenden Zeile sichtbar halten
+    requestAnimationFrame(function () {
+      var sel = tb.querySelector('.sortchips [aria-pressed="true"]');
+      if (!sel) return;
+      var row = sel.parentNode, rr = row.getBoundingClientRect(), cr = sel.getBoundingClientRect();
+      if (cr.right > rr.right || cr.left < rr.left) row.scrollLeft += cr.left - rr.left - 16;
+    });
   }
 
   function renderFilters() {
@@ -721,6 +805,18 @@
     if (b.id === 'toastUndo') { var f = undoFn; $('toast').hidden = true; undoFn = null; if (f) f(); return; }
     if (b.id === 'refresh') { load(); return; }
     if (ds.act === 'export') { exportBackup(); return; }
+    if (ds.ssort) { state.savedSort = ds.ssort; store.set('savedSort', state.savedSort); state.savedEditing = false; renderList(); return; }
+    if (ds.act === 'sedit') { state.savedEditing = !state.savedEditing; renderList(); return; }
+    if (ds.smove) {
+      var ids = sortedSaved().map(function (v) { return v.id; }), at = ids.indexOf(ds.smove), to = at + (+ds.dir);
+      if (at < 0 || to < 0 || to >= ids.length) return;
+      ids.splice(to, 0, ids.splice(at, 1)[0]);
+      applySavedOrder(ids); renderList();
+      var again = document.querySelector('[data-smove="' + ds.smove + '"][data-dir="' + ds.dir + '"]:not([disabled])') ||
+        document.querySelector('[data-smove="' + ds.smove + '"]:not([disabled])');
+      if (again) again.focus();
+      return;
+    }
     if (ds.dur) { state.dur = ds.dur; renderList(); return; }
     if (ds.act === 'hideseen') { state.hideSeen = !state.hideSeen; store.set('hideSeen', state.hideSeen); renderList(); return; }
     if (ds.act === 'showmuted') { state.showMuted = !state.showMuted; renderList(); return; }
@@ -743,7 +839,7 @@
       store.set('theme', state.theme); applyTheme(); return;
     }
     if (b.id === 'savedBtn' || ds.act === 'back') {
-      state.view = state.view === 'saved' ? 'main' : 'saved'; state.editing = false;
+      state.view = state.view === 'saved' ? 'main' : 'saved'; state.editing = false; state.savedEditing = false;
       render(); window.scrollTo(0, 0); return;
     }
     if (ds.range) { state.range = +ds.range; render(); return; }
@@ -916,6 +1012,35 @@
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
 
+  // ---------------------------------------------------------------- Merkliste verschieben
+  var sdrag = null;
+  list.addEventListener('pointerdown', function (e) {
+    var h = e.target.closest('[data-shandle]');
+    if (!h || !state.savedEditing) return;
+    e.preventDefault();
+    var row = h.closest('.srow');
+    row.classList.add('dragging');
+    sdrag = { row: row, pid: e.pointerId };
+    try { h.setPointerCapture(e.pointerId); } catch (err) { /* egal */ }
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!sdrag || e.pointerId !== sdrag.pid) return;
+    var y = e.clientY, row = sdrag.row;
+    var prev = row.previousElementSibling, next = row.nextElementSibling;
+    if (prev) { var r = prev.getBoundingClientRect(); if (y < r.top + r.height / 2) row.parentNode.insertBefore(row, prev); }
+    if (next) { var q = next.getBoundingClientRect(); if (y > q.top + q.height / 2) row.parentNode.insertBefore(next, row); }
+    if (y < 70) window.scrollBy(0, -12); else if (y > window.innerHeight - 70) window.scrollBy(0, 12);
+  });
+  function endSdrag() {
+    if (!sdrag) return;
+    sdrag.row.classList.remove('dragging');
+    sdrag = null;
+    applySavedOrder(Array.prototype.map.call(document.querySelectorAll('#srows .srow'), function (r) { return r.dataset.sid; }));
+    renderList();
+  }
+  window.addEventListener('pointerup', endSdrag);
+  window.addEventListener('pointercancel', endSdrag);
+
   // ---------------------------------------------------------------- Start
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
@@ -944,7 +1069,7 @@
   var BACKUP_KEYS = {
     lists: 'array', listColors: 'object', chan: 'object', saved: 'object',
     done: 'array', order: 'object', sort: 'string', theme: 'string', digestOpen: 'boolean',
-    seen: 'object', hideSeen: 'boolean'
+    seen: 'object', hideSeen: 'boolean', savedSort: 'string', savedOrder: 'array'
   };
   function typeOk(v, t) { return t === 'array' ? Array.isArray(v) : (t === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === t); }
   function backupData() {
