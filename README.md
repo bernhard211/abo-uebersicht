@@ -84,6 +84,6 @@ Ohne Netz und ohne Schlüssel funktioniert ein Testlauf mit Beispiel-Feeds: `tes
 ## Gut zu wissen
 - **Datenschutz:** Zugangsdaten und Abo-Liste liegen nur als Secrets bei GitHub, nicht im Code. Die App hat nur **Lesezugriff** auf YouTube. Die fertige Seite ist bei kostenlosem GitHub Pages aber unter ihrer Adresse öffentlich abrufbar. Sie wird nicht von Suchmaschinen indexiert, hat aber auch kein Passwort. Willst du einen Schutz, kannst du dieselben Dateien bei Cloudflare Pages hosten und dort *Cloudflare Access* davorschalten.
 - **Zusammenfassungen** entstehen aus Titel und Videobeschreibung, nicht aus dem Gesprochenen.
-- **RSS-Feeds** enthalten pro Kanal die letzten 15 Videos. Für 7 Tage reicht das bei fast allen Kanälen.
+- **RSS-Feeds** enthalten pro Kanal nur die letzten 15 Videos. Bei sehr aktiven Kanälen lädt das Skript die übrigen automatisch über die YouTube-API nach (1 Kontingent-Einheit pro 50 Videos).
 - **Shorts** werden ausgeblendet, das heißt alle Videos bis 60 Sekunden sowie alles, was der Feed als Short kennzeichnet.
 - **YouTube-Kontingent:** Ein täglicher Lauf verbraucht nur wenige Einheiten des kostenlosen Tageskontingents von 10.000.

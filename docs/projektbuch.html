@@ -124,7 +124,7 @@ td code { white-space: nowrap; }
 .tech a { color: #F59B6E; }
 
 /* Ablauf eines Laufs – echte Reihenfolge, daher nummeriert */
-ol.run { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; counter-reset: s; }
+ol.run { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; counter-reset: s; }
 ol.run li { counter-increment: s; background: #14171C; border: 1px solid var(--tech-line); border-radius: 12px; padding: 14px 14px 14px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 ol.run li::before { content: counter(s, decimal-leading-zero); font-family: var(--mono); font-size: 12px; color: #F07A45; }
 ol.run b { color: #FFFFFF; font-family: var(--display); font-size: 16px; font-weight: 700; }
@@ -330,6 +330,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
         <li><b>Uhrzeit prüfen</b><span>Job <code>gate</code> rechnet in Europe/Berlin und berücksichtigt Verspätungen bis knapp eine Stunde.</span></li>
         <li><b>Abos laden</b><span>Refresh-Token gegen Zugriffstoken tauschen, dann <code>subscriptions.list</code> seitenweise, 50 pro Seite.</span></li>
         <li><b>Neue Videos sammeln</b><span>RSS-Feed je Kanal, 8 parallel, 3 Versuche. Behalten wird ab 0 Uhr vor 7 Tagen, Shorts fliegen raus.</span></li>
+        <li><b>Aktive Kanäle nachladen</b><span>Liegen alle 15 Feed-Einträge im Zeitraum, holt <code>playlistItems.list</code> die Upload-Playlist seitenweise bis zum Beginn des Zeitraums.</span></li>
         <li><b>Dauer ergänzen</b><span><code>videos.list</code> mit <code>contentDetails</code>, 50 IDs pro Anfrage. Alles bis 60 Sekunden wird als Short verworfen.</span></li>
         <li><b>Zusammenfassen</b><span>Nur Videos ohne Zusammenfassung im Cache. 15 pro Anfrage, 4 parallel, misslungene Blöcke werden halbiert und wiederholt.</span></li>
         <li><b>Kurz gesagt</b><span>Einmal pro Kalendertag aus den abgeschlossenen Tagen, danach aus <code>data/digests.json</code> wiederverwendet.</span></li>
@@ -399,6 +400,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
           <tbody>
             <tr><td>YouTube Data API v3<br><code>subscriptions.list</code></td><td>Eigene Abos lesen (<code>mine=true</code>, 50 pro Seite)</td><td>OAuth, Scope <code>youtube.readonly</code></td><td>1 Einheit pro Seite, ca. 17 pro Lauf</td></tr>
             <tr><td>YouTube Data API v3<br><code>videos.list</code></td><td>Videodauer (<code>contentDetails</code>)</td><td>OAuth-Token (oder API-Schlüssel)</td><td>1 Einheit pro 50 Videos, Tageskontingent 10.000</td></tr>
+            <tr><td>YouTube Data API v3<br><code>playlistItems.list</code></td><td>Upload-Playlist sehr aktiver Kanäle, wenn der Feed nicht reicht</td><td>OAuth-Token</td><td>1 Einheit pro 50 Videos, nur bei Bedarf</td></tr>
             <tr><td>YouTube-RSS<br><code>/feeds/videos.xml?channel_id=</code></td><td>Neueste Videos je Kanal: Titel, Beschreibung, Bild, Datum</td><td>öffentlich, ohne Anmeldung</td><td>kostenlos, letzte 15 Videos je Kanal</td></tr>
             <tr><td>Google OAuth 2.0<br><code>oauth2.googleapis.com/token</code></td><td>Einmal Code gegen Refresh-Token tauschen, danach je Lauf Zugriffstoken holen</td><td>Desktop-Client, PKCE, Rückleitung auf <code>127.0.0.1</code></td><td>kostenlos. App „In Produktion“, damit der Token nicht nach 7 Tagen abläuft</td></tr>
             <tr><td>Claude Messages API<br><code>claude-haiku-5-5</code></td><td>Zusammenfassungen und „Kurz gesagt“</td><td>API-Schlüssel</td><td>nach Tokens. Thinking aus, <code>effort: low</code>, Structured Outputs</td></tr>
@@ -498,7 +500,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
           <h3>Bekannte Grenzen</h3>
           <ul>
             <li>Zusammenfassungen entstehen aus Titel und Beschreibung, nicht aus dem Gesprochenen</li>
-            <li>RSS liefert 15 Videos je Kanal. Für 7 Tage reicht das fast immer.</li>
+            <li>RSS liefert nur 15 Videos je Kanal. Bei sehr aktiven Kanälen lädt das Skript den Rest automatisch über die API nach.</li>
             <li>„Gesehen“ ist eine eigene Markierung, der YouTube-Verlauf ist per API nicht abrufbar</li>
             <li>Persönliche Einstellungen gelten pro Gerät, über Sichern/Wiederherstellen übertragbar</li>
             <li>GitHub startet geplante Läufe teils mit Verspätung</li>

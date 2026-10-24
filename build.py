@@ -175,6 +175,57 @@ def iso_duration_seconds(s: str) -> int:
     return ((d * 24 + h) * 60 + mi) * 60 + se
 
 
+FEED_LIMIT = 15   # so viele Einträge liefert der RSS-Feed je Kanal höchstens
+
+
+def fetch_uploads(sub: dict, cutoff: dt.datetime, token: str | None, key: str | None,
+                  max_pages: int = 10) -> list[dict]:
+    """Upload-Playlist eines Kanals über die API, bis Videos älter als `cutoff` kommen.
+
+    Für sehr aktive Kanäle, bei denen die 15 Feed-Einträge den Zeitraum nicht abdecken.
+    1 Kontingent-Einheit pro 50 Videos.
+    """
+    playlist = "UU" + sub["id"][2:]
+    headers = {"Authorization": f"Bearer {token}"} if token else None
+    out, page = [], None
+    for _ in range(max_pages):
+        params = {"part": "snippet,contentDetails", "playlistId": playlist, "maxResults": 50}
+        if page:
+            params["pageToken"] = page
+        if not token:
+            params["key"] = key
+        data = json.loads(http_get("https://www.googleapis.com/youtube/v3/playlistItems?" +
+                                   urllib.parse.urlencode(params), headers=headers))
+        reached_cutoff = False
+        for item in data.get("items", []):
+            cd, sn = item.get("contentDetails", {}), item.get("snippet", {})
+            vid, published = cd.get("videoId"), cd.get("videoPublishedAt")
+            if not vid or not published:          # privat, gelöscht oder noch nicht erschienen
+                continue
+            t = parse_time(published)
+            if t and t < cutoff:
+                reached_cutoff = True
+                continue
+            thumbs = sn.get("thumbnails") or {}
+            thumb = (thumbs.get("high") or thumbs.get("medium") or thumbs.get("default") or {}).get("url") \
+                or f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+            out.append({
+                "id": vid,
+                "title": (sn.get("title") or "").strip(),
+                "channel": (sn.get("channelTitle") or sub["title"]).strip(),
+                "channel_id": sub["id"],
+                "published": published,
+                "description": (sn.get("description") or "").strip(),
+                "thumb": thumb,
+                "is_short": False,                  # Shorts fallen später über die Dauer (≤ 60 s) raus
+                "url": f"https://www.youtube.com/watch?v={vid}",
+            })
+        page = data.get("nextPageToken")
+        if reached_cutoff or not page:
+            break
+    return out
+
+
 def fetch_durations(ids: list[str], key: str | None = None, token: str | None = None) -> dict[str, int]:
     """1 Kontingent-Einheit pro 50 Videos – praktisch kostenlos."""
     out = {}
@@ -433,7 +484,40 @@ def main() -> int:
             return []
 
     with ThreadPoolExecutor(max_workers=1 if args.offline else 8) as ex:
-        all_videos = [v for vs in ex.map(work, subs) for v in vs]
+        per_channel = list(ex.map(work, subs))
+    all_videos = [v for vs in per_channel for v in vs]
+
+    # Sehr aktive Kanäle: Liegen alle 15 Feed-Einträge im Zeitraum, fehlen vermutlich ältere –
+    # die holen wir über die Upload-Playlist der API nach.
+    saturated = [sub for sub, vs in zip(subs, per_channel)
+                 if len(vs) >= FEED_LIMIT and all((parse_time(v["published"]) or now) >= cutoff for v in vs)]
+    if saturated:
+        yt_key_bf = os.environ.get("YT_API_KEY")
+        if token or yt_key_bf:
+            known = {v["id"] for v in all_videos}
+            added, failed = 0, 0
+            def backfill(sub):
+                try:
+                    return fetch_uploads(sub, cutoff, token, yt_key_bf)
+                except Exception as e:  # noqa: BLE001 – Feed-Daten bleiben ja erhalten
+                    log(f"  ! Nachladen {sub['id']}: {e}")
+                    return None
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                for extra in ex.map(backfill, saturated):
+                    if extra is None:
+                        failed += 1
+                        continue
+                    for v in extra:
+                        if v["id"] not in known:
+                            known.add(v["id"])
+                            all_videos.append(v)
+                            added += 1
+            n = len(saturated)
+            log(f"{n} {'Kanal' if n == 1 else 'Kanäle'} über die API nachgeladen (+{added} Videos)" +
+                (f", {failed} fehlgeschlagen" if failed else ""))
+        else:
+            n = len(saturated)
+            log(f"  ! {n} {'Kanal hat' if n == 1 else 'Kanäle haben'} mehr als 15 neue Videos – ohne Google-Login nicht nachladbar")
 
     videos = []
     for v in all_videos:

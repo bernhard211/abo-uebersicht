@@ -39,6 +39,7 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
 - Den RSS-Feed `https://www.youtube.com/feeds/videos.xml?channel_id=…` je Kanal abrufen, 8 parallel, 3 Versuche. Ein einzelner Kanal darf scheitern.
 - Gesammelt werden **ganze Kalendertage**: ab 0 Uhr vor `max_days` (=7) Tagen in meiner Zeitzone (`zoneinfo`) bis jetzt.
 - Shorts ausblenden: Links mit `/shorts/` und, sobald die Dauer bekannt ist, alles ≤ 60 Sekunden.
+- **Sehr aktive Kanäle:** Der RSS-Feed liefert nur die letzten 15 Videos. Liegen alle 15 Einträge im Zeitraum, fehlen vermutlich ältere. Dann über die API die Upload-Playlist (`UU` + Kanal-ID ab dem 3. Zeichen) mit `playlistItems.list` (`part=snippet,contentDetails`, 50 pro Seite) seitenweise nachladen, bis Videos vor dem Zeitraum kommen (max. 10 Seiten). `videoPublishedAt` als Datum nehmen, Einträge ohne dieses Feld (privat/gelöscht) überspringen, Duplikate zum Feed vermeiden. Im Protokoll: „N Kanäle über die API nachgeladen (+X Videos)“.
 
 **Dauer:** `videos.list` mit `part=contentDetails`, 50 IDs pro Anfrage, mit dem OAuth-Token. ISO-8601-Dauer in Sekunden umrechnen.
 
