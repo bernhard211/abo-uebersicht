@@ -25,8 +25,12 @@
     done: store.get('done', []),                       // abgehakte Kalendertage 'YYYY-MM-DD'
     theme: store.get('theme', 'auto'),                 // 'auto' | 'dark' | 'light'
     digestOpen: store.get('digestOpen', true),         // "Kurz gesagt" auf- oder zugeklappt
-    locked: false                                      // Passwort-Abfrage sichtbar
+    locked: false,                                     // Passwort-Abfrage sichtbar
+    chan: store.get('chan', {}),                       // Kanal-ID -> { name, color, lists: [] }
+    lists: store.get('lists', []),                     // eigene Listen, in Anzeige-Reihenfolge
+    list: 'Alle'                                       // aktiver Listen-Filter
   };
+  var sheet = null;        // offenes Menü: { type: 'chan', cid, name } | { type: 'lists' }
   if (!state.order.thema) state.order.thema = [];
   if (!state.order.kanal) state.order.kanal = [];
   var data = null;
@@ -112,8 +116,48 @@
   }
   function visibleVideos() {
     return data.videos.filter(function (v) {
-      return inRange(v) && (state.filter === 'Alle' || v.topic === state.filter);
+      return inRange(v) && (state.filter === 'Alle' || v.topic === state.filter) && inList(v);
     });
+  }
+
+  // ---------------------------------------------------------------- Kanal-Farben und Listen
+  var COLORS = [
+    { id: 'rot', hex: '#DC2626', name: 'Rot' }, { id: 'orange', hex: '#EA580C', name: 'Orange' },
+    { id: 'gelb', hex: '#CA8A04', name: 'Gelb' }, { id: 'gruen', hex: '#16A34A', name: 'Grün' },
+    { id: 'tuerkis', hex: '#0D9488', name: 'Türkis' }, { id: 'blau', hex: '#2563EB', name: 'Blau' },
+    { id: 'lila', hex: '#7C3AED', name: 'Lila' }, { id: 'pink', hex: '#DB2777', name: 'Pink' }
+  ];
+  function colorOf(id) { for (var i = 0; i < COLORS.length; i++) if (COLORS[i].id === id) return COLORS[i]; return null; }
+  function chanInfo(cid) { return state.chan[cid] || { lists: [] }; }
+  function dotHtml(cid) {
+    var c = colorOf(chanInfo(cid).color);
+    return c ? '<span class="cdot" style="background:' + c.hex + '" title="' + c.name + '" aria-hidden="true"></span>' : '';
+  }
+  function inList(v) {
+    return state.list === 'Alle' || (chanInfo(v.channel_id).lists || []).indexOf(state.list) >= 0;
+  }
+  function saveChan() {
+    Object.keys(state.chan).forEach(function (k) {   // leere Einträge aufräumen
+      var c = state.chan[k];
+      if (!c.color && !(c.lists && c.lists.length)) delete state.chan[k];
+    });
+    store.set('chan', state.chan);
+    store.set('lists', state.lists);
+  }
+  function editChan(cid, name) {
+    var c = state.chan[cid] || (state.chan[cid] = { lists: [] });
+    if (name) c.name = name;
+    if (!c.lists) c.lists = [];
+    return c;
+  }
+  function addList(name) {
+    name = String(name || '').trim().slice(0, 30);
+    if (!name || name === 'Alle') return null;
+    if (state.lists.indexOf(name) < 0) state.lists.push(name);
+    return name;
+  }
+  function listCount(name) {
+    return Object.keys(state.chan).filter(function (k) { return (state.chan[k].lists || []).indexOf(name) >= 0; }).length;
   }
   function fallbackDigest(vids) {
     var tc = {}, cc = {};
@@ -136,13 +180,21 @@
   var TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
   var CHEV = '<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   var GRIP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h14"/></svg>';
+  var PENCIL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>';
+  var DOTS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+  var BOX = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/></svg>';
+  var BOX_ON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="currentColor"/><path d="M7.5 12.5l3 3 6-7" stroke="var(--card)" stroke-width="2.5"/></svg>';
   var CHECK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
 
   function cardHtml(v, inSaved) {
     var open = !!state.open[v.id];
     var isSaved = !!state.saved[v.id];
     var now = Date.now();
-    var sub = (inSaved ? v.channel : (state.group === 'thema' ? v.channel : v.topic)) + ' · ' + ageLabel(now - Date.parse(v.published));
+    var showChan = inSaved || state.group === 'thema';
+    var sub = (showChan
+      ? '<button class="chanbtn" data-chan="' + esc(v.channel_id) + '" data-cname="' + esc(v.channel) + '" aria-label="Kanal ' + esc(v.channel) + ' markieren oder einer Liste zuordnen">' +
+        dotHtml(v.channel_id) + esc(v.channel) + '</button>'
+      : esc(v.topic)) + ' · ' + esc(ageLabel(now - Date.parse(v.published)));
     var dur = durLabel(v.seconds);
     var bgLabel = inSaved || isSaved ? 'Entfernen' : 'Merken';
     return '<div class="swipe' + (inSaved || isSaved ? ' remove' : '') + '" data-vid="' + esc(v.id) + '">' +
@@ -150,7 +202,7 @@
       '<article class="card"><div class="cardtop">' +
       '<div class="thumb">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
       (dur ? '<span class="dur">' + dur + '</span>' : '') + '</div>' +
-      '<div class="meta"><h3>' + esc(v.title) + '</h3><span>' + esc(sub) + '</span></div></div>' +
+      '<div class="meta"><h3>' + esc(v.title) + '</h3><span class="sub">' + sub + '</span></div></div>' +
       (open ? '<p class="summary">' + esc(v.summary || 'Keine Beschreibung vorhanden.') + '</p>' : '') +
       '<div class="actions"><button data-toggle="' + esc(v.id) + '" aria-expanded="' + open + '">' +
       (open ? 'Weniger' : 'Zusammenfassung') + '</button>' +
@@ -215,6 +267,14 @@
     $('chips').innerHTML = topics.map(function (t) {
       return '<button data-topic="' + esc(t) + '" aria-pressed="' + (state.filter === t) + '">' + esc(t) + '</button>';
     }).join('');
+
+    if (state.list !== 'Alle' && state.lists.indexOf(state.list) < 0) state.list = 'Alle';
+    $('lists').hidden = !state.lists.length;
+    $('lists').innerHTML = state.lists.length
+      ? ['Alle'].concat(state.lists).map(function (l) {
+          return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : esc(l)) + '</button>';
+        }).join('') + '<button class="editchip" data-act="editlists" aria-label="Listen bearbeiten">' + PENCIL + '</button>'
+      : '';
   }
 
   function orderedNames(groups) {
@@ -284,7 +344,7 @@
       var todayStart = startOfToday().getTime();
       var past = vids.filter(function (v) { return Date.parse(v.published) < todayStart; });
       if (past.length) {
-        digest = state.filter === 'Alle' && data.digests && data.digests[String(state.range)]
+        digest = state.filter === 'Alle' && state.list === 'Alle' && data.digests && data.digests[String(state.range)]
           ? data.digests[String(state.range)] : fallbackDigest(past);
       }
     }
@@ -305,17 +365,20 @@
       list.forEach(function (v) { gsec += v.seconds || 0; });
       var open = !state.editing && !!state.expanded[n];
       var count = plural(list.length, 'Video', 'Videos') + (gsec ? ' · ' + totalLabel(gsec) : '');
+      var cid = state.group === 'kanal' ? list[0].channel_id : null;
       return '<section class="group' + (open ? ' open' : '') + '" data-gi="' + gi + '">' +
         '<div class="ghead">' +
         (state.editing ? '<span class="handle" data-handle="' + gi + '" aria-hidden="true">' + GRIP + '</span>' : '') +
         '<button class="gtoggle" data-expand="' + gi + '" aria-expanded="' + open + '"' + (state.editing ? ' tabindex="-1"' : '') + '>' +
-        '<span class="gname">' + esc(n) + '</span><span class="gcount">' + count + '</span>' + (state.editing ? '' : CHEV) + '</button></div>' +
+        '<span class="gtext"><span class="gname">' + (cid ? dotHtml(cid) : '') + esc(n) + '</span><span class="gcount">' + count + '</span></span>' + (state.editing ? '' : CHEV) + '</button>' +
+        (cid && !state.editing ? '<button class="gmenu" data-chan="' + esc(cid) + '" data-cname="' + esc(n) + '" aria-label="Kanal ' + esc(n) + ' markieren oder einer Liste zuordnen">' + DOTS + '</button>' : '') +
+        '</div>' +
         (open ? '<div class="cards">' + list.map(function (v) { return cardHtml(v, false); }).join('') + '</div>' : '') +
         '</section>';
     }).join('');
 
     if (!vids.length) {
-      html = '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum oder ein anderes Thema.</p></div>';
+      html = '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum, ein anderes Thema oder eine andere Liste.</p></div>';
     }
     $('groups').innerHTML = html;
     $('groups').classList.toggle('editing', state.editing);
@@ -376,6 +439,85 @@
   }
 
   // ---------------------------------------------------------------- Laden
+  // ---------------------------------------------------------------- Menü für Kanäle und Listen
+  var lastFocus = null;
+  function openSheet(s) {
+    sheet = s;
+    lastFocus = document.activeElement;
+    $('sheet').hidden = false;
+    document.body.style.overflow = 'hidden';
+    renderSheet();
+    var first = $('sheetBody').querySelector('button, input');
+    if (first) first.focus();
+  }
+  function closeSheet() {
+    sheet = null;
+    $('sheet').hidden = true;
+    document.body.style.overflow = '';
+    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  }
+  function newListForm() {
+    return '<form class="newlist" id="newListForm"><label class="sr" for="newList">Neue Liste</label>' +
+      '<input id="newList" maxlength="30" placeholder="Neue Liste, z. B. Favoriten" autocomplete="off">' +
+      '<button type="submit" class="tbtn">Anlegen</button></form>';
+  }
+  function renderSheet() {
+    if (!sheet) return;
+    var html = '';
+    if (sheet.type === 'chan') {
+      var c = chanInfo(sheet.cid), lists = c.lists || [];
+      html += '<h2 id="sheetTitle">' + dotHtml(sheet.cid) + esc(sheet.name) + '</h2>' +
+        '<h3>Farbe</h3><div class="swatches" role="group" aria-label="Farbe">' +
+        '<button class="swatch none" data-color="" aria-pressed="' + !c.color + '" aria-label="Keine Farbe"></button>' +
+        COLORS.map(function (col) {
+          return '<button class="swatch" data-color="' + col.id + '" style="background:' + col.hex + '" aria-pressed="' + (c.color === col.id) + '" aria-label="' + col.name + '">' +
+            (c.color === col.id ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>' : '') + '</button>';
+        }).join('') + '</div>' +
+        '<h3>Listen</h3>' +
+        (state.lists.length
+          ? '<div class="listopts">' + state.lists.map(function (l) {
+              var on = lists.indexOf(l) >= 0;
+              return '<button class="listopt" data-tlist="' + esc(l) + '" aria-pressed="' + on + '">' + (on ? BOX_ON : BOX) + '<span>' + esc(l) + '</span></button>';
+            }).join('') + '</div>'
+          : '<p class="hint2">Noch keine Listen. Leg unten eine an – der Kanal kommt gleich mit hinein.</p>') +
+        newListForm();
+    } else {
+      html += '<h2 id="sheetTitle">Listen bearbeiten</h2>' +
+        (state.lists.length
+          ? '<div class="listedit">' + state.lists.map(function (l, i) {
+              return '<div class="lrow"><input class="lname" data-li="' + i + '" value="' + esc(l) + '" maxlength="30" aria-label="Name der Liste ' + esc(l) + '">' +
+                '<span class="lcount">' + plural(listCount(l), 'Kanal', 'Kanäle') + '</span>' +
+                '<button class="ldel" data-dellist="' + i + '" aria-label="Liste ' + esc(l) + ' löschen">' + TRASH + '</button></div>';
+            }).join('') + '</div><p class="hint2">Zum Umbenennen einfach den Namen ändern. Kanäle ordnest du über ⋯ beim Kanal oder einen Tipp auf den Kanalnamen zu.</p>'
+          : '<p class="hint2">Noch keine Listen.</p>') +
+        newListForm();
+    }
+    html += '<button class="tbtn primary done" data-act="closesheet">Fertig</button>';
+    $('sheetBody').innerHTML = html;
+  }
+  function deleteList(name) {
+    if (!name) return;
+    var snapLists = state.lists.slice(), snapChan = JSON.parse(JSON.stringify(state.chan));
+    state.lists = state.lists.filter(function (l) { return l !== name; });
+    Object.keys(state.chan).forEach(function (k) {
+      state.chan[k].lists = (state.chan[k].lists || []).filter(function (l) { return l !== name; });
+    });
+    saveChan(); render(); renderSheet();
+    toast('Liste „' + name + '“ gelöscht', function () { state.lists = snapLists; state.chan = snapChan; saveChan(); render(); renderSheet(); });
+  }
+  function renameList(i, name) {
+    var old = state.lists[i];
+    name = String(name || '').trim().slice(0, 30);
+    if (!name || name === old || name === 'Alle' || state.lists.indexOf(name) >= 0) { renderSheet(); return; }
+    state.lists[i] = name;
+    Object.keys(state.chan).forEach(function (k) {
+      var ls = state.chan[k].lists || [], j = ls.indexOf(old);
+      if (j >= 0) ls[j] = name;
+    });
+    if (state.list === old) state.list = name;
+    saveChan(); render();
+  }
+
   // ---------------------------------------------------------------- Entschlüsseln
   function b64ToBytes(s) {
     var bin = atob(s), a = new Uint8Array(bin.length);
@@ -466,6 +608,20 @@
     if (ds.range) { state.range = +ds.range; render(); return; }
     if (ds.group) { if (state.group !== ds.group) { state.group = ds.group; state.expanded = {}; state.editing = false; } render(); return; }
     if (ds.topic) { state.filter = ds.topic; render(); return; }
+    if (ds.lfilter) { state.list = ds.lfilter; render(); return; }
+    if (ds.chan) { openSheet({ type: 'chan', cid: ds.chan, name: ds.cname }); return; }
+    if (ds.act === 'editlists') { openSheet({ type: 'lists' }); return; }
+    if (ds.act === 'closesheet') { closeSheet(); return; }
+    if (sheet && 'color' in ds) {
+      editChan(sheet.cid, sheet.name).color = ds.color || null;
+      saveChan(); render(); renderSheet(); return;
+    }
+    if (sheet && ds.tlist) {
+      var c = editChan(sheet.cid, sheet.name), i = c.lists.indexOf(ds.tlist);
+      if (i >= 0) c.lists.splice(i, 1); else c.lists.push(ds.tlist);
+      saveChan(); render(); renderSheet(); return;
+    }
+    if (sheet && ds.dellist !== undefined) { deleteList(state.lists[+ds.dellist]); return; }
     if (ds.sort) { state.sort = ds.sort; store.set('sort', state.sort); renderList(); return; }
     if (ds.act === 'edit') {
       state.editing = !state.editing;
@@ -599,6 +755,25 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
+  $('sheet').addEventListener('submit', function (e) {
+    if (e.target.id !== 'newListForm') return;
+    e.preventDefault();
+    var name = addList($('newList').value);
+    if (!name) return;
+    if (sheet && sheet.type === 'chan') {
+      var c = editChan(sheet.cid, sheet.name);
+      if (c.lists.indexOf(name) < 0) c.lists.push(name);
+    }
+    saveChan(); render(); renderSheet();
+    var inp = $('newList'); if (inp) inp.focus();
+  });
+  $('sheet').addEventListener('change', function (e) {
+    if (e.target.classList.contains('lname')) renameList(+e.target.dataset.li, e.target.value);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (sheet && e.key === 'Escape') closeSheet();
+  });
+
   $('showPw').addEventListener('change', function () { $('pw').type = this.checked ? 'text' : 'password'; });
   $('lock').addEventListener('submit', function (e) {
     e.preventDefault();
