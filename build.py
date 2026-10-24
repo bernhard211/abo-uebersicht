@@ -17,8 +17,10 @@ Aufruf:
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -26,6 +28,7 @@ import sys
 import threading
 import time
 import tomllib
+import unicodedata
 from zoneinfo import ZoneInfo
 import urllib.parse
 import urllib.request
@@ -279,7 +282,7 @@ def derive_topics(client, cfg: dict, subs: list[dict], videos: list[dict]) -> li
         return DEFAULT_TOPICS
     TOPICS_FILE.parent.mkdir(parents=True, exist_ok=True)
     TOPICS_FILE.write_text(json.dumps({"topics": topics}, ensure_ascii=False, indent=1), "utf-8")
-    log(f"Themen abgeleitet: {', '.join(topics)}")
+    log(f"Themen abgeleitet: {len(topics)} Themen (Liste steht verschlüsselt in der App)")
     return topics
 
 
@@ -409,6 +412,31 @@ def make_digests(client, cfg: dict, videos: list[dict], today: dt.date, tz) -> d
     return digests
 
 
+# ---------------------------------------------------------------- Verschlüsselung
+
+KDF_ITERATIONS = 600_000
+
+
+def encrypt_payload(data: dict, password: str) -> dict:
+    """Verschlüsselt die Übersicht mit AES-256-GCM; Schlüssel per PBKDF2-SHA256 aus dem Passwort.
+
+    Das Salz ist pro Repository fest, damit die App den abgeleiteten Schlüssel behalten kann
+    und das Passwort nur einmal eingegeben werden muss.
+    """
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    repo = os.environ.get("GITHUB_REPOSITORY", "lokal")
+    salt = hashlib.sha256(f"abo-uebersicht|{repo}".encode()).digest()[:16]
+    pw = unicodedata.normalize("NFC", password).encode("utf-8")
+    key = hashlib.pbkdf2_hmac("sha256", pw, salt, KDF_ITERATIONS, dklen=32)
+    iv = os.urandom(12)
+    plain = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ct = AESGCM(key).encrypt(iv, plain, None)   # Chiffretext + 16-Byte-Tag, wie WebCrypto es erwartet
+    b64 = lambda b: base64.b64encode(b).decode("ascii")  # noqa: E731
+    return {"v": 1, "enc": "AES-256-GCM", "kdf": "PBKDF2-SHA256", "iter": KDF_ITERATIONS,
+            "salt": b64(salt), "iv": b64(iv), "data": b64(ct)}
+
+
 # ---------------------------------------------------------------- Hauptablauf
 
 def main() -> int:
@@ -522,7 +550,14 @@ def main() -> int:
         "videos": out_videos,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+    password = os.environ.get("APP_PASSWORD", "")
+    if password:
+        out = encrypt_payload(data, password)
+        log("Übersicht verschlüsselt")
+    else:
+        out = data
+        log("  ! Kein APP_PASSWORD gesetzt – Übersicht ist UNVERSCHLÜSSELT öffentlich lesbar")
+    args.out.write_text(json.dumps(out, ensure_ascii=False, indent=1), "utf-8")
     log(f"Geschrieben: {args.out}")
     return 0
 
