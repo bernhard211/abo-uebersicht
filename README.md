@@ -1,13 +1,13 @@
 # Abo-Übersicht
 
-Die App zeigt neue Videos deiner YouTube-Abos aus den letzten 1–7 Tagen. Du kannst sie nach Thema oder Kanal gruppieren. Jedes Video hat eine Kurz-Zusammenfassung, und ganz oben steht ein Überblick über den gewählten Zeitraum. Sie läuft als Web-App (PWA) auf dem Handy und wird jeden Morgen automatisch aktualisiert, auch die Liste deiner Abos.
+Die App zeigt neue Videos deiner YouTube-Abos von heute bis 7 Tage zurück, nach Kanal gruppiert. Kanäle kannst du farbig markieren und eigenen Listen zuordnen. Jedes Video hat eine Kurz-Zusammenfassung, und oben steht ein Überblick über die abgeschlossenen Tage. Sie läuft als Web-App (PWA) auf dem Handy, ist per Passwort verschlüsselt (Secret `APP_PASSWORD`) und wird mehrmals täglich automatisch aktualisiert.
 
 ```
 Google-Login (einmalig) ──► build.py (GitHub Actions, täglich)
                               ├─ deine Abos über die YouTube-API
                               ├─ neue Videos über den RSS-Feed je Kanal
                               ├─ Videodauer über die YouTube-API
-                              └─ Thema + Zusammenfassung per Claude
+                              └─ Zusammenfassung per Claude
                                      │
                                      ▼
                               site/data.json ──► GitHub Pages ──► App auf dem Handy
@@ -60,7 +60,7 @@ Danach ist die App unter `https://<dein-name>.github.io/abo-uebersicht/` erreich
 
 ## Anpassen
 In `config.toml` kannst du ändern:
-- die **Themen**. Ihre Reihenfolge ist auch die Reihenfolge der Filter in der App.
+- **effort** (Aufwand) für Claude.
 - **max_days**, also wie weit zurück gesammelt wird.
 - ob **Shorts** angezeigt werden.
 - das **Claude-Modell**.

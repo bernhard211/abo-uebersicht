@@ -12,15 +12,8 @@ include_shorts = false
 # Datei mit deinen Abos (Google-Takeout-Export, siehe README)
 subscriptions_file = "subscriptions.csv"
 
-# Themen, in die Videos einsortiert werden.
-# Leer lassen = Claude leitet beim ersten Lauf passende Themen aus deinen Abos ab und merkt sie sich.
-# Eigene Liste eintragen = genau diese Themen, in dieser Reihenfolge als Filter in der App, z. B.:
-#   topics = ["Technik", "Wissenschaft", "Heimwerken", "Kochen", "Musik"]
-# Was nicht passt, landet unter "Sonstiges".
-topics = []
-
 [llm]
-# Claude-Modell für Themen und Zusammenfassungen
+# Claude-Modell für die Zusammenfassungen
 model = "claude-haiku-5-5"
 # Wie viele Videos pro Anfrage zusammengefasst werden
 batch_size = 15

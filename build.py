@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Erstellt site/data.json: neue Videos deiner YouTube-Abos der letzten Tage,
-mit Thema und Kurz-Zusammenfassung.
+mit Kurz-Zusammenfassung.
 
 Umgebungsvariablen (optional):
-  ANTHROPIC_API_KEY  Themen + Zusammenfassungen per Claude (ohne: Beschreibung als Ersatz)
+  ANTHROPIC_API_KEY  Zusammenfassungen per Claude (ohne: Beschreibung als Ersatz)
   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN
                      Abos automatisch über die YouTube-API lesen (einrichten mit auth_setup.py);
                      ohne: Abo-Liste aus subscriptions.csv (Takeout)
@@ -46,7 +46,6 @@ NS = {
     "yt": "http://www.youtube.com/xml/schemas/2015",
     "media": "http://search.yahoo.com/mrss/",
 }
-FALLBACK_TOPIC = "Sonstiges"
 
 
 def log(msg: str) -> None:
@@ -241,58 +240,9 @@ def claude_json(client, model: str, user: str, schema: dict, max_tokens: int = 1
         return extract_json(text)
 
 
-TOPICS_FILE = ROOT / "data" / "topics.json"
-DEFAULT_TOPICS = ["Technik", "Wissenschaft", "Nachrichten", "Unterhaltung", "Musik", "Gaming"]
-
-
-def derive_topics(client, cfg: dict, subs: list[dict], videos: list[dict]) -> list[str]:
-    """Einmalig passende Themen aus den abonnierten Kanälen ableiten und merken."""
-    if TOPICS_FILE.exists():
-        saved = json.loads(TOPICS_FILE.read_text("utf-8")).get("topics") or []
-        if saved:
-            return saved
-    channels = sorted({s["title"] for s in subs if s.get("title")} | {v["channel"] for v in videos})[:500]
-    examples = [f'{v["channel"]}: {v["title"]}' for v in videos[:150]]
-    user = (
-        f"Das sind die YouTube-Kanäle, die ich abonniert habe:\n{json.dumps(channels, ensure_ascii=False)}\n\n"
-        f"Beispiele aktueller Videos:\n{json.dumps(examples, ensure_ascii=False, indent=0)}\n\n"
-        "Schlage 6 bis 10 Themen vor, mit denen sich diese Videos sinnvoll gruppieren lassen. "
-        "Kurze deutsche Bezeichnungen (1–2 Wörter), klar voneinander abgegrenzt, so konkret wie möglich "
-        "(lieber \"Elektronik\" und \"Software\" als nur \"Technik\", wenn beides viel vorkommt). "
-        "Kein \"Sonstiges\". Sortiert nach Häufigkeit."
-    )
-    schema = {
-        "type": "object",
-        "properties": {"themen": {"type": "array", "items": {"type": "string"}}},
-        "required": ["themen"],
-        "additionalProperties": False,
-    }
-    try:
-        raw = claude_json(client, cfg["llm"]["model"], user, schema, 2000)["themen"]
-        topics = []
-        for t in raw:
-            t = str(t).strip()
-            if t and t.lower() != FALLBACK_TOPIC.lower() and t not in topics:
-                topics.append(t)
-        topics = topics[:10]
-    except Exception as e:  # noqa: BLE001
-        log(f"  ! Themen ableiten: {e} – nutze Standardliste (nächster Lauf versucht es erneut)")
-        return DEFAULT_TOPICS
-    if not topics:
-        return DEFAULT_TOPICS
-    TOPICS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TOPICS_FILE.write_text(json.dumps({"topics": topics}, ensure_ascii=False, indent=1), "utf-8")
-    log(f"Themen abgeleitet: {len(topics)} Themen (Liste steht verschlüsselt in der App)")
-    return topics
-
-
 def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None:
-    topics = cfg["topics"]
-    sig = "|".join(topics)
-    allowed = topics + [FALLBACK_TOPIC]
-    by_lower = {t.lower(): t for t in allowed}
-    # Neu einsortieren, wenn sich die Themenliste geändert hat
-    todo = [v for v in videos if cache.get(v["id"], {}).get("sig") != sig]
+    # Nur Videos, die noch keine Zusammenfassung haben
+    todo = [v for v in videos if not cache.get(v["id"], {}).get("summary")]
     if not todo:
         return
     schema = {
@@ -304,10 +254,9 @@ def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None
                     "type": "object",
                     "properties": {
                         "id": {"type": "string"},
-                        "thema": {"type": "string", "enum": allowed},
                         "zusammenfassung": {"type": "string"},
                     },
-                    "required": ["id", "thema", "zusammenfassung"],
+                    "required": ["id", "zusammenfassung"],
                     "additionalProperties": False,
                 },
             }
@@ -322,8 +271,6 @@ def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None
         items = [{"id": v["id"], "kanal": v["channel"], "titel": v["title"],
                   "beschreibung": v["description"][:1200]} for v in batch]
         user = (
-            f"Ordne jedes Video genau einem dieser Themen zu: {json.dumps(topics, ensure_ascii=False)}. "
-            f"Nur wenn wirklich keines passt: \"{FALLBACK_TOPIC}\".\n"
             "Schreibe zu jedem Video eine Zusammenfassung auf Deutsch: 2–3 sachliche Sätze, worum es geht "
             "und was man mitnimmt. Keine Werbung, Sponsoren oder Links aus der Beschreibung übernehmen. "
             "Wenn die Beschreibung kaum Inhalt hat, schreibe ehrlich nur, was der Titel erkennen lässt.\n\n"
@@ -345,9 +292,8 @@ def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None
         for r in result:
             vid = r.get("id")
             if vid in ids:
-                topic = by_lower.get(str(r.get("thema", "")).strip().lower(), FALLBACK_TOPIC)
                 with lock:
-                    cache[vid] = {"topic": topic, "summary": str(r.get("zusammenfassung", "")).strip(), "sig": sig}
+                    cache[vid] = {"summary": str(r.get("zusammenfassung", "")).strip()}
                     stats["ok"] += 1
 
     bs = cfg["llm"].get("batch_size", 15)
@@ -378,7 +324,7 @@ def make_digests(client, cfg: dict, videos: list[dict], today: dt.date, tz) -> d
         day = parse_time(v["published"]).astimezone(tz).date()
         back = (today - day).days
         if 1 <= back <= max_days:
-            items.append({"tage_zurueck": back, "kanal": v["channel"], "titel": v["title"], "thema": v["topic"]})
+            items.append({"tage_zurueck": back, "kanal": v["channel"], "titel": v["title"]})
     if not items:
         return {}
     days = [str(d) for d in range(1, max_days + 1)]
@@ -511,14 +457,10 @@ def main() -> int:
     if os.environ.get("ANTHROPIC_API_KEY"):
         import anthropic
         client = anthropic.Anthropic()
-        if not cfg.get("topics"):
-            cfg["topics"] = derive_topics(client, cfg, subs, videos)
         summarize_videos(client, cfg, videos, cache)
-        for v in videos:
-            v["topic"] = cache.get(v["id"], {}).get("topic", FALLBACK_TOPIC)
         digests = make_digests(client, cfg, videos, today, tz)
     else:
-        log("Kein ANTHROPIC_API_KEY – Beschreibung statt Zusammenfassung, ohne Themen")
+        log("Kein ANTHROPIC_API_KEY – Beschreibung statt Zusammenfassung")
 
     out_videos = []
     for v in videos:
@@ -528,7 +470,6 @@ def main() -> int:
         out_videos.append({
             "id": v["id"], "title": v["title"], "channel": v["channel"], "channel_id": v["channel_id"],
             "published": v["published"], "url": v["url"], "thumb": v["thumb"],
-            "topic": c.get("topic", FALLBACK_TOPIC),
             "summary": c.get("summary") or (desc[:280] + ("…" if len(desc) > 280 else "")),
             "seconds": secs,
         })
@@ -539,13 +480,11 @@ def main() -> int:
     CACHE_FILE.write_text(json.dumps({k: v for k, v in cache.items() if k in keep},
                                      ensure_ascii=False, indent=1), "utf-8")
 
-    topics_used = [t for t in (cfg.get("topics") or []) + [FALLBACK_TOPIC] if any(v["topic"] == t for v in out_videos)]
     data = {
         "generated": now.isoformat(),
         "timezone": cfg.get("timezone", "Europe/Berlin"),
         "max_days": cfg["max_days"],
         "subscriptions": len(subs),
-        "topics": topics_used,
         "digests": digests,
         "videos": out_videos,
     }
