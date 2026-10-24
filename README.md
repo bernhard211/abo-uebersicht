@@ -1,6 +1,6 @@
 # Abo-Übersicht
 
-Die App zeigt neue Videos deiner YouTube-Abos von heute bis 7 Tage zurück, nach Kanal gruppiert. Kanäle kannst du farbig markieren und eigenen Listen zuordnen. Jedes Video hat eine Kurz-Zusammenfassung, und oben steht ein Überblick über die abgeschlossenen Tage. Sie läuft als Web-App (PWA) auf dem Handy, ist per Passwort verschlüsselt (Secret `APP_PASSWORD`) und wird mehrmals täglich automatisch aktualisiert.
+Die App zeigt neue Videos deiner YouTube-Abos von heute bis 7 Tage zurück, nach Kanal gruppiert. Kanäle kannst du farbig markieren und eigenen Listen zuordnen. Jedes Video hat eine Kurz-Zusammenfassung, und oben steht ein Überblick über die abgeschlossenen Tage. Sie läuft als Web-App (PWA) auf dem Handy, ist per Passwort verschlüsselt (Secret `APP_PASSWORD`) und wird stündlich von 10 bis 0 Uhr automatisch aktualisiert.
 
 ```
 Google-Login (einmalig) ──► build.py (GitHub Actions, täglich)

@@ -500,14 +500,14 @@
         return '<button data-dur="' + d.id + '" aria-pressed="' + (state.dur === d.id) + '">' + d.label + '</button>';
       }).join('');
   }
-  // Warnung, wenn länger kein Lauf geklappt hat (Läufe alle 2 Std. von ca. 10 bis 0 Uhr)
+  // Warnung, wenn länger kein Lauf geklappt hat (Läufe stündlich von ca. 10 bis 0 Uhr)
   function renderStale() {
     var age = (Date.now() - Date.parse(data.generated)) / 3600000, h = new Date().getHours();
     var stale = age > 12 || (h >= 12 && age > 4.5);
     $('stale').hidden = !stale;
     if (stale) {
       $('stale').innerHTML = '<strong>Die Übersicht ist ' + (age >= 48 ? Math.floor(age / 24) + ' Tage' : Math.floor(age) + ' Std.') + ' alt.</strong> ' +
-        'Normalerweise wird sie alle 2 Stunden aktualisiert. Vermutlich ist ein Lauf bei GitHub fehlgeschlagen – schau unter Actions nach. ' +
+        'Normalerweise wird sie stündlich aktualisiert. GitHub lässt geplante Läufe manchmal aus – hält das an, schau unter Actions nach. ' +
         'Steht dort „Google-Login fehlgeschlagen“, führe <code>auth_setup.py</code> erneut aus.';
     }
   }

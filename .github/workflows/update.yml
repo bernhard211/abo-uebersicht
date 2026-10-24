@@ -2,8 +2,9 @@ name: Übersicht aktualisieren
 
 on:
   schedule:
-    # Stündlich zwischen 8 und 23 Uhr UTC anstoßen – der Job "gate" lässt nur die geraden
-    # Stunden 10–0 Uhr deutscher Zeit durch. So passt es in Sommer- UND Winterzeit.
+    # Stündlich zwischen 8 und 23 Uhr UTC anstoßen – der Job "gate" lässt alles zwischen 10 und 0 Uhr
+    # deutscher Zeit durch. So passt es in Sommer- UND Winterzeit. GitHub lässt geplante Läufe bei hoher
+    # Last manchmal aus; durch den Stundentakt kommt der nächste spätestens eine Stunde später.
     - cron: "17 8-23 * * *"
   workflow_dispatch:        # manuell starten: Actions › Übersicht aktualisieren › Run workflow
 
@@ -22,7 +23,7 @@ jobs:
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
-      - name: Uhrzeit prüfen (deutsche Zeit, alle 2 Std. von 10 bis 0 Uhr)
+      - name: Uhrzeit prüfen (deutsche Zeit, stündlich von 10 bis 0 Uhr)
         id: check
         run: |
           if [ "${{ github.event_name }}" != "schedule" ]; then
@@ -32,7 +33,7 @@ jobs:
           H=$((10#$(TZ=Europe/Berlin date +%H))); M=$((10#$(TZ=Europe/Berlin date +%M)))
           # Geplant ist jeweils hh:17 – bei Verspätung zählt die Stunde, für die der Lauf gedacht war
           if [ "$M" -lt 17 ]; then H=$(( (H + 23) % 24 )); fi
-          if [ $((H % 2)) -eq 0 ] && { [ "$H" -ge 10 ] || [ "$H" -eq 0 ]; }; then
+          if [ "$H" -ge 10 ] || [ "$H" -eq 0 ]; then
             echo "Geplante Stunde $H Uhr – Übersicht wird aktualisiert."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else

@@ -163,11 +163,11 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
     <div class="hero-text">
       <span class="eyebrow">Privates App-Projekt · Stand Oktober 2026</span>
       <h1>Abo-<br>Übersicht<span>.</span></h1>
-      <p class="lead">Alle neuen Videos aus über 800 YouTube-Abos auf einen Blick: nach Kanal gruppiert, in eigenen farbigen Listen sortiert, mit Kurz-Zusammenfassungen und Merkliste. Läuft als installierbare Web-App auf dem Android-Handy und aktualisiert sich alle zwei Stunden selbst.</p>
+      <p class="lead">Alle neuen Videos aus über 800 YouTube-Abos auf einen Blick: nach Kanal gruppiert, in eigenen farbigen Listen sortiert, mit Kurz-Zusammenfassungen und Merkliste. Läuft als installierbare Web-App auf dem Android-Handy und aktualisiert sich stündlich selbst.</p>
     </div>
     <div class="facts" aria-label="Eckdaten">
       <div class="fact"><b>Heute + 7</b><span>Tage Rückblick, kalendertagsgenau</span></div>
-      <div class="fact"><b>8 × täglich</b><span>Aktualisierung, 10 bis 0 Uhr</span></div>
+      <div class="fact"><b>stündlich</b><span>Aktualisierung, 10 bis 0 Uhr</span></div>
       <div class="fact"><b>0 €</b><span>Hosting und Automatik (GitHub)</span></div>
       <div class="fact"><b>AES-256</b><span>verschlüsselte Daten, Passwort nötig</span></div>
     </div>
@@ -203,7 +203,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
       </div>
       <div class="arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
       <div class="node" role="listitem">
-        <span class="where">GitHub Actions · alle 2 Std.</span>
+        <span class="where">GitHub Actions · stündlich</span>
         <h3>Übersicht bauen</h3>
         <p>Abos holen, neue Videos sammeln, von Claude zusammenfassen lassen, alles verschlüsseln.</p>
       </div>
@@ -324,7 +324,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
     <section class="block" id="lauf">
       <div class="head">
         <h3>Ablauf eines Laufs</h3>
-        <p class="prose">Der Workflow wird stündlich angestoßen (<code>17 8-23 * * *</code> UTC). Durch kommen nur die geraden Stunden von 10 bis 0 Uhr deutscher Zeit, damit es ohne Eingriff zur Sommer- und Winterzeit passt.</p>
+        <p class="prose">Der Workflow wird stündlich angestoßen (<code>17 8-23 * * *</code> UTC). Gebaut wird zwischen 10 und 0 Uhr deutscher Zeit, damit es ohne Eingriff zur Sommer- und Winterzeit passt. Lässt GitHub einen Anstoß aus, was bei hoher Last vorkommt, folgt der nächste eine Stunde später.</p>
       </div>
       <ol class="run">
         <li><b>Uhrzeit prüfen</b><span>Job <code>gate</code> rechnet in Europe/Berlin und berücksichtigt Verspätungen bis knapp eine Stunde.</span></li>
@@ -503,7 +503,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <li>RSS liefert nur 15 Videos je Kanal. Bei sehr aktiven Kanälen lädt das Skript den Rest automatisch über die API nach.</li>
             <li>„Gesehen“ ist eine eigene Markierung, der YouTube-Verlauf ist per API nicht abrufbar</li>
             <li>Persönliche Einstellungen gelten pro Gerät, über Sichern/Wiederherstellen übertragbar</li>
-            <li>GitHub startet geplante Läufe teils mit Verspätung</li>
+            <li>GitHub startet geplante Läufe teils mit Verspätung oder lässt einzelne aus</li>
           </ul>
         </div>
         <div class="panel">

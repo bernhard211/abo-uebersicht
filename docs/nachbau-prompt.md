@@ -81,7 +81,7 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
 ## 5. Workflow `.github/workflows/update.yml`
 
 - Trigger `schedule: "17 8-23 * * *"` plus `workflow_dispatch`.
-- **Job `gate`:** prüft die Uhrzeit in Europe/Berlin und lässt nur die **geraden Stunden 10–0 Uhr** durch, damit es ohne Eingriff im Sommer und Winter passt. Bei Verspätung zählt die geplante Stunde (Minute < 17 → Stunde − 1). Manuelle Starts laufen immer. [ANPASSEN: gewünschte Zeiten]
+- **Job `gate`:** prüft die Uhrzeit in Europe/Berlin und lässt **stündlich 10–0 Uhr** durch, damit es ohne Eingriff im Sommer und Winter passt. **Nicht** nur jede zweite Stunde bauen: GitHub lässt geplante Läufe bei hoher Last manchmal ganz aus, sonst entstehen mehrstündige Lücken. Bei Verspätung zählt die geplante Stunde (Minute < 17 → Stunde − 1). Manuelle Starts laufen immer. [ANPASSEN: gewünschte Zeiten]
 - **Job `build`:** Python 3.12, `pip install -r requirements.txt`, Takeout-Fallback aus dem Secret, `actions/cache` für den Ordner `data/` (Key `summaries-${{ github.run_id }}`, `restore-keys: summaries-`), `python build.py` mit allen Secrets als Umgebungsvariablen, dann `configure-pages` und `upload-pages-artifact` (Ordner `site`).
 - **Job `deploy`:** `actions/deploy-pages`.
 - **Job `keepalive`:** GitHub schaltet geplante Läufe bei öffentlichen Repos nach 60 Tagen ohne Aktivität ab. Ist der letzte Commit ≥ 50 Tage alt, wird ein leerer Commit gepusht (Job-Berechtigung `contents: write`).
@@ -126,7 +126,7 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
   - **Anzahl**: nach Videoanzahl.
 - **„Kurz gesagt“**-Karte (dunkel, Stern-Symbol, Zusatz „bis gestern“, einklappbar, Zustand gespeichert). Nur bei Zeitraum ≥ 1. Ohne Listen-Filter der Claude-Text, sonst eine einfache Auswertung (Anzahl, aktivste Kanäle) der gefilterten, abgeschlossenen Tage.
 - **Filterzeile:** runder **Such-Knopf** (öffnet Suchfeld mit ×, Suche nach Titel/Kanal, mehrere Wörter, akzent-unabhängig; Treffer klappen auf), „**Gesehene ausblenden**“ (gespeichert), **Dauer**: Alle / unter 15 / 15–30 / über 30 Min.
-- **Veraltet-Warnung** (gelb): tagsüber ab 12 Uhr bei Alter > 4,5 Std., sonst > 12 Std., mit Tipps (Actions prüfen, ggf. `auth_setup.py` erneut).
+- **Veraltet-Warnung** (gelb): tagsüber ab 12 Uhr bei Alter > 4,5 Std., sonst > 12 Std. (Text: „normalerweise stündlich aktualisiert“), mit Tipps (Actions prüfen, ggf. `auth_setup.py` erneut).
 - Unten: „N Kanäle stummgeschaltet · anzeigen“ (stumme Kanäle dann blass mit „stumm“), „Stand: …“, Hinweise zu den Gesten, **Sichern · Wiederherstellen**, App sperren, Datenschutz.
 
 **Videokarte**
