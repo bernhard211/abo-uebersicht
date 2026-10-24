@@ -263,7 +263,7 @@ h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; }
 #sheetBody { display: flex; flex-direction: column; gap: 10px; }
 .sheetpanel h2 { margin: 0 0 4px; font-size: 19px; font-weight: 700; display: flex; align-items: center; }
 .sheetpanel h3 { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--ink2); }
-.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; justify-items: center; }
 .swatch { width: 44px; height: 44px; border-radius: 22px; border: 2px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
 .swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--ink); }
 .swatch.none { background: var(--card); border-color: var(--line2); position: relative; overflow: hidden; }
@@ -287,3 +287,4 @@ h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; }
 .hint2 { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2); }
 .sheetpanel .done { justify-content: center; min-height: 48px; font-size: 15px; margin-top: 8px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.listchips .addchip { color: var(--ink2); border-style: dashed; }

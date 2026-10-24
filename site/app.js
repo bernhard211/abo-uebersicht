@@ -13,8 +13,7 @@
 
   var state = {
     view: 'main',              // 'main' | 'saved'
-    group: 'thema',            // 'kanal' | 'thema'
-    filter: 'Alle',
+    group: 'kanal',            // Übersicht ist immer nach Kanal gruppiert
     range: 7,                  // wird bewusst nicht gespeichert
     open: {},                  // aufgeklappte Zusammenfassungen
     expanded: {},              // aufgeklappte Gruppen – beim Start alle zu
@@ -116,16 +115,18 @@
   }
   function visibleVideos() {
     return data.videos.filter(function (v) {
-      return inRange(v) && (state.filter === 'Alle' || v.topic === state.filter) && inList(v);
+      return inRange(v) && inList(v);
     });
   }
 
   // ---------------------------------------------------------------- Kanal-Farben und Listen
   var COLORS = [
     { id: 'rot', hex: '#DC2626', name: 'Rot' }, { id: 'orange', hex: '#EA580C', name: 'Orange' },
-    { id: 'gelb', hex: '#CA8A04', name: 'Gelb' }, { id: 'gruen', hex: '#16A34A', name: 'Grün' },
-    { id: 'tuerkis', hex: '#0D9488', name: 'Türkis' }, { id: 'blau', hex: '#2563EB', name: 'Blau' },
-    { id: 'lila', hex: '#7C3AED', name: 'Lila' }, { id: 'pink', hex: '#DB2777', name: 'Pink' }
+    { id: 'gelb', hex: '#EAB308', name: 'Gelb' }, { id: 'limette', hex: '#84CC16', name: 'Hellgrün' },
+    { id: 'gruen', hex: '#15803D', name: 'Grün' }, { id: 'tuerkis', hex: '#14B8A6', name: 'Türkis' },
+    { id: 'hellblau', hex: '#38BDF8', name: 'Hellblau' }, { id: 'blau', hex: '#1D4ED8', name: 'Blau' },
+    { id: 'lila', hex: '#7C3AED', name: 'Lila' }, { id: 'pink', hex: '#EC4899', name: 'Pink' },
+    { id: 'braun', hex: '#92400E', name: 'Braun' }
   ];
   function colorOf(id) { for (var i = 0; i < COLORS.length; i++) if (COLORS[i].id === id) return COLORS[i]; return null; }
   function chanInfo(cid) { return state.chan[cid] || { lists: [] }; }
@@ -160,11 +161,11 @@
     return Object.keys(state.chan).filter(function (k) { return (state.chan[k].lists || []).indexOf(name) >= 0; }).length;
   }
   function fallbackDigest(vids) {
-    var tc = {}, cc = {};
-    vids.forEach(function (v) { tc[v.topic] = (tc[v.topic] || 0) + 1; cc[v.channel] = (cc[v.channel] || 0) + 1; });
-    var top = function (o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; })[0]; };
-    var t = top(tc), c = top(cc);
-    return 'Schwerpunkt: ' + t + ' (' + plural(tc[t], 'Video', 'Videos') + '). Am aktivsten war ' + c + '.';
+    var cc = {};
+    vids.forEach(function (v) { cc[v.channel] = (cc[v.channel] || 0) + 1; });
+    var top = Object.keys(cc).sort(function (a, b) { return cc[b] - cc[a]; }).slice(0, 3);
+    return plural(vids.length, 'Video', 'Videos') + ' aus ' + plural(Object.keys(cc).length, 'Kanal', 'Kanälen') +
+      '. Am aktivsten: ' + top.map(function (c) { return c + ' (' + cc[c] + ')'; }).join(', ') + '.';
   }
   function savedList() {
     return Object.keys(state.saved).map(function (k) { return state.saved[k]; })
@@ -190,11 +191,11 @@
     var open = !!state.open[v.id];
     var isSaved = !!state.saved[v.id];
     var now = Date.now();
-    var showChan = inSaved || state.group === 'thema';
-    var sub = (showChan
+    // In der Übersicht steht der Kanal schon im Kopf der Gruppe, in der Merkliste an der Karte
+    var sub = (inSaved
       ? '<button class="chanbtn" data-chan="' + esc(v.channel_id) + '" data-cname="' + esc(v.channel) + '" aria-label="Kanal ' + esc(v.channel) + ' markieren oder einer Liste zuordnen">' +
-        dotHtml(v.channel_id) + esc(v.channel) + '</button>'
-      : esc(v.topic)) + ' · ' + esc(ageLabel(now - Date.parse(v.published)));
+        dotHtml(v.channel_id) + esc(v.channel) + '</button> · '
+      : '') + esc(ageLabel(now - Date.parse(v.published)));
     var dur = durLabel(v.seconds);
     var bgLabel = inSaved || isSaved ? 'Entfernen' : 'Merken';
     return '<div class="swipe' + (inSaved || isSaved ? ' remove' : '') + '" data-vid="' + esc(v.id) + '">' +
@@ -260,28 +261,17 @@
       ? 'Heute · ' + WD[today.getDay()] + ' ' + today.getDate() + '. ' + MONTHS[today.getMonth()]
       : fmtSpan(dayOf(r), today);
 
-    document.querySelectorAll('.seg button').forEach(function (b) {
-      b.setAttribute('aria-pressed', String(b.dataset.group === state.group));
-    });
-    var topics = ['Alle'].concat(data ? data.topics : []);
-    $('chips').innerHTML = topics.map(function (t) {
-      return '<button data-topic="' + esc(t) + '" aria-pressed="' + (state.filter === t) + '">' + esc(t) + '</button>';
-    }).join('');
-
     if (state.list !== 'Alle' && state.lists.indexOf(state.list) < 0) state.list = 'Alle';
-    $('lists').hidden = !state.lists.length;
-    $('lists').innerHTML = state.lists.length
-      ? ['Alle'].concat(state.lists).map(function (l) {
-          return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : esc(l)) + '</button>';
-        }).join('') + '<button class="editchip" data-act="editlists" aria-label="Listen bearbeiten">' + PENCIL + '</button>'
-      : '';
+    $('lists').innerHTML = ['Alle'].concat(state.lists).map(function (l) {
+      return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : esc(l)) + '</button>';
+    }).join('') + (state.lists.length
+      ? '<button class="editchip" data-act="editlists" aria-label="Listen bearbeiten">' + PENCIL + '</button>'
+      : '<button class="addchip" data-act="editlists">+ Liste anlegen</button>');
   }
 
   function orderedNames(groups) {
     var names = Object.keys(groups);
     var byCount = function (a, b) {
-      var sa = a === 'Sonstiges', sb = b === 'Sonstiges';
-      if (sa !== sb) return sa ? 1 : -1;
       return groups[b].length - groups[a].length || a.localeCompare(b, 'de');
     };
     if (state.sort !== 'eigene') return names.sort(byCount);
@@ -344,7 +334,7 @@
       var todayStart = startOfToday().getTime();
       var past = vids.filter(function (v) { return Date.parse(v.published) < todayStart; });
       if (past.length) {
-        digest = state.filter === 'Alle' && state.list === 'Alle' && data.digests && data.digests[String(state.range)]
+        digest = state.list === 'Alle' && data.digests && data.digests[String(state.range)]
           ? data.digests[String(state.range)] : fallbackDigest(past);
       }
     }
@@ -354,9 +344,8 @@
     $('digestText').hidden = !state.digestOpen;
     $('digestText').textContent = digest;
 
-    var key = state.group === 'thema' ? 'topic' : 'channel';
     var groups = {};
-    vids.forEach(function (v) { (groups[v[key]] = groups[v[key]] || []).push(v); });
+    vids.forEach(function (v) { (groups[v.channel] = groups[v.channel] || []).push(v); });
     groupNames = orderedNames(groups);
     renderToolbar(groupNames.length > 0);
 
@@ -365,7 +354,7 @@
       list.forEach(function (v) { gsec += v.seconds || 0; });
       var open = !state.editing && !!state.expanded[n];
       var count = plural(list.length, 'Video', 'Videos') + (gsec ? ' · ' + totalLabel(gsec) : '');
-      var cid = state.group === 'kanal' ? list[0].channel_id : null;
+      var cid = list[0].channel_id;
       return '<section class="group' + (open ? ' open' : '') + '" data-gi="' + gi + '">' +
         '<div class="ghead">' +
         (state.editing ? '<span class="handle" data-handle="' + gi + '" aria-hidden="true">' + GRIP + '</span>' : '') +
@@ -378,7 +367,7 @@
     }).join('');
 
     if (!vids.length) {
-      html = '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum, ein anderes Thema oder eine andere Liste.</p></div>';
+      html = '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum oder eine andere Liste.</p></div>';
     }
     $('groups').innerHTML = html;
     $('groups').classList.toggle('editing', state.editing);
@@ -403,7 +392,7 @@
   function setSaved(v, on) {
     if (on) {
       state.saved[v.id] = {
-        id: v.id, title: v.title, channel: v.channel, channel_id: v.channel_id, topic: v.topic,
+        id: v.id, title: v.title, channel: v.channel, channel_id: v.channel_id,
         thumb: v.thumb, url: v.url, seconds: v.seconds, summary: v.summary, published: v.published,
         savedAt: v.savedAt || Date.now()
       };
@@ -553,7 +542,6 @@
     data = d;
     state.locked = false;
     if (state.range > d.max_days) state.range = d.max_days;
-    if (state.filter !== 'Alle' && d.topics.indexOf(state.filter) < 0) state.filter = 'Alle';
     render();
   }
   function showLock() {
@@ -606,8 +594,6 @@
       render(); window.scrollTo(0, 0); return;
     }
     if (ds.range) { state.range = +ds.range; render(); return; }
-    if (ds.group) { if (state.group !== ds.group) { state.group = ds.group; state.expanded = {}; state.editing = false; } render(); return; }
-    if (ds.topic) { state.filter = ds.topic; render(); return; }
     if (ds.lfilter) { state.list = ds.lfilter; render(); return; }
     if (ds.chan) { openSheet({ type: 'chan', cid: ds.chan, name: ds.cname }); return; }
     if (ds.act === 'editlists') { openSheet({ type: 'lists' }); return; }
