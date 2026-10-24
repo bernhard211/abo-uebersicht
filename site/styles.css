@@ -220,3 +220,21 @@ h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; }
   box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 14px; font-weight: 500;
 }
 .toast button { min-height: 40px; padding: 0 12px; border: none; border-radius: 8px; background: transparent; color: inherit; font-size: 14px; font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+/* Passwort-Abfrage */
+.lock { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; }
+.lock h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.lock p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink2); }
+.lock code { font-size: 13px; background: var(--soft); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.lock label[for="pw"] { font-size: 13px; font-weight: 600; color: var(--ink2); margin-top: 4px; }
+.lock input[type="password"], .lock input[type="text"] {
+  min-height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2);
+  background: var(--bg); color: var(--ink); font: inherit; font-size: 16px;
+}
+.lock input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.showpw { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; color: var(--ink2); }
+.showpw input { width: 20px; height: 20px; accent-color: var(--accent); }
+.lock .tbtn { justify-content: center; min-height: 48px; font-size: 15px; }
+.lock .tbtn:disabled { opacity: .6; }
+.lockmsg { min-height: 1.5em; font-weight: 600; color: var(--ink) !important; }
+.linkbtn { border: none; background: none; padding: 8px; font: inherit; font-size: 12px; color: var(--ink3); text-decoration: underline; cursor: pointer; }

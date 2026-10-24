@@ -24,11 +24,13 @@
     saved: store.get('saved', {}),                     // id -> Video (+ savedAt)
     done: store.get('done', []),                       // abgehakte Kalendertage 'YYYY-MM-DD'
     theme: store.get('theme', 'auto'),                 // 'auto' | 'dark' | 'light'
-    digestOpen: store.get('digestOpen', true)          // "Kurz gesagt" auf- oder zugeklappt
+    digestOpen: store.get('digestOpen', true),         // "Kurz gesagt" auf- oder zugeklappt
+    locked: false                                      // Passwort-Abfrage sichtbar
   };
   if (!state.order.thema) state.order.thema = [];
   if (!state.order.kanal) state.order.kanal = [];
   var data = null;
+  var encPayload = null;   // verschlüsselte data.json, solange noch nicht entsperrt
   var groupNames = [];   // aktuell angezeigte Gruppen, Index = data-gi
 
   var $ = function (id) { return document.getElementById(id); };
@@ -176,7 +178,18 @@
     $('savedCount').textContent = n > 99 ? '99+' : n;
     $('savedBtn').setAttribute('aria-pressed', String(state.view === 'saved'));
     $('savedBtn').setAttribute('aria-label', state.view === 'saved' ? 'Zurück zur Übersicht' : 'Merkliste öffnen (' + n + ')');
-    $('mainControls').hidden = state.view === 'saved';
+    var locked = state.locked;
+    $('lock').hidden = !locked;
+    $('savedBtn').hidden = locked;
+    $('refresh').hidden = locked;
+    $('lockBtn').hidden = locked || !encPayload;
+    $('mainControls').hidden = state.view === 'saved' || locked;
+    if (locked) {
+      $('rangeLabel').innerHTML = '&nbsp;';
+      $('title').textContent = 'Deine Abos';
+      $('stats').textContent = 'Gesperrt';
+      return;
+    }
 
     if (state.view === 'saved') {
       $('rangeLabel').textContent = 'Für später';
@@ -252,6 +265,10 @@
   }
 
   function renderList() {
+    if (state.locked) {
+      $('digest').hidden = true; $('toolbar').hidden = true; $('groups').innerHTML = ''; $('foot').textContent = '';
+      return;
+    }
     if (state.view === 'saved') { renderSaved(); return; }
     if (!data) return;
     var vids = visibleVideos();
@@ -359,16 +376,62 @@
   }
 
   // ---------------------------------------------------------------- Laden
+  // ---------------------------------------------------------------- Entschlüsseln
+  function b64ToBytes(s) {
+    var bin = atob(s), a = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return a;
+  }
+  function bytesToB64(buf) {
+    var a = new Uint8Array(buf), s = '';
+    for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+    return btoa(s);
+  }
+  function decryptWith(rawKey, enc) {
+    return crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt'])
+      .then(function (k) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(enc.iv) }, k, b64ToBytes(enc.data)); })
+      .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+  }
+  function deriveRaw(password, enc) {
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(password.normalize('NFC')), 'PBKDF2', false, ['deriveBits'])
+      .then(function (base) {
+        return crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64ToBytes(enc.salt), iterations: enc.iter }, base, 256);
+      });
+  }
+  // Mit dem gemerkten Schlüssel entsperren; null = Passwort nötig
+  function unlockStored(enc) {
+    var st = store.get('key', null);
+    if (!st || st.salt !== enc.salt) return Promise.resolve(null);
+    return decryptWith(b64ToBytes(st.k), enc).catch(function () {
+      $('lockMsg').textContent = 'Das Passwort wurde geändert – bitte neu eingeben.';
+      return null;
+    });
+  }
+  function applyData(d) {
+    data = d;
+    state.locked = false;
+    if (state.range > d.max_days) state.range = d.max_days;
+    if (state.filter !== 'Alle' && d.topics.indexOf(state.filter) < 0) state.filter = 'Alle';
+    render();
+  }
+  function showLock() {
+    data = null;
+    state.locked = true;
+    render();
+  }
+
   function load() {
     var btn = $('refresh');
     btn.classList.add('spin');
     return fetch('data.json?t=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) {
-        data = d;
-        if (state.range > d.max_days) state.range = d.max_days;
-        if (state.filter !== 'Alle' && d.topics.indexOf(state.filter) < 0) state.filter = 'Alle';
-        render();
+        if (!d || !d.enc) { encPayload = null; return d; }
+        encPayload = d;
+        return unlockStored(d);
+      })
+      .then(function (d) {
+        if (d) applyData(d); else showLock();
       })
       .catch(function () {
         if (!data) { $('stats').textContent = 'Übersicht konnte nicht geladen werden.'; renderHeader(); }
@@ -388,6 +451,7 @@
     var ds = b.dataset;
     if (b.id === 'toastUndo') { var f = undoFn; $('toast').hidden = true; undoFn = null; if (f) f(); return; }
     if (b.id === 'refresh') { load(); return; }
+    if (ds.act === 'lock') { store.set('key', null); state.view = 'main'; showLock(); window.scrollTo(0, 0); return; }
     if (b.id === 'digestToggle') {
       state.digestOpen = !state.digestOpen; store.set('digestOpen', state.digestOpen); renderList(); return;
     }
@@ -535,6 +599,27 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
+  $('showPw').addEventListener('change', function () { $('pw').type = this.checked ? 'text' : 'password'; });
+  $('lock').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var pw = $('pw').value;
+    if (!pw || !encPayload) return;
+    var enc = encPayload, btn = $('unlockBtn');
+    btn.disabled = true;
+    $('lockMsg').textContent = 'Entsperre …';
+    deriveRaw(pw, enc)
+      .then(function (raw) {
+        return decryptWith(raw, enc).then(function (d) {
+          store.set('key', { salt: enc.salt, k: bytesToB64(raw) });
+          $('pw').value = '';
+          $('lockMsg').textContent = '';
+          applyData(d);
+        });
+      })
+      .catch(function () { $('lockMsg').textContent = 'Passwort falsch. Bitte noch einmal versuchen.'; })
+      .then(function () { btn.disabled = false; });
+  });
+
   applyTheme();
   renderHeader();
   load();
