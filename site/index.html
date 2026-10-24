@@ -60,6 +60,7 @@
       <button type="submit" class="tbtn primary" id="unlockBtn">Entsperren</button>
       <p class="lockmsg" id="lockMsg" role="alert"></p>
     </form>
+    <div class="stale" id="stale" role="status" hidden></div>
     <section class="digest" id="digest" hidden>
       <button class="digesthead" id="digestToggle" aria-expanded="true" aria-controls="digestText">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FDBA74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 10l-5 3.6L16.8 20 12 16.4 7.2 20 9 13.6 4 10l6.1-1.2z"/></svg>
@@ -69,10 +70,20 @@
       </button>
       <p id="digestText"></p>
     </section>
+    <div class="filters" id="filters" hidden>
+      <div class="search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <label class="sr" for="q">Suche nach Titel oder Kanal</label>
+        <input type="search" id="q" placeholder="Titel oder Kanal suchen" autocomplete="off" enterkeyhint="search">
+        <button id="qClear" aria-label="Suche leeren" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="chips durchips" id="durs" role="group" aria-label="Dauer und Gesehen"></div>
+    </div>
     <div class="toolbar" id="toolbar"></div>
     <div id="groups"></div>
+    <p class="foot" id="mutedbar" hidden></p>
     <p class="foot" id="foot"></p>
-    <p class="foot">Video nach rechts wischen = merken · ⋯ beim Kanal = Farbe &amp; Listen</p>
+    <p class="foot">Nach rechts wischen = merken · nach links = gesehen · ⋯ beim Kanal = Listen &amp; stumm</p>
     <p class="foot" id="backup">
       <button class="linkbtn" data-act="export">Sichern</button> ·
       <button class="linkbtn" data-act="import">Wiederherstellen</button>

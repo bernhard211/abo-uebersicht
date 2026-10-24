@@ -177,10 +177,13 @@ h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; }
 .swipe { position: relative; border-radius: 14px; }
 .swipebg {
   position: absolute; inset: 0; border-radius: 14px; background: var(--save); color: #fff;
-  display: none; align-items: center; gap: 8px; padding: 0 20px; font-size: 14px; font-weight: 700;
+  display: none; align-items: center; padding: 0 20px; font-size: 14px; font-weight: 700;
 }
+.sbr, .sbl { display: flex; align-items: center; gap: 8px; }
+.swipe.left .sbr, .swipe:not(.left) .sbl { display: none; }
 .swipe.left .swipebg { justify-content: flex-end; }
 .swipe.remove .swipebg { background: var(--remove); }
+.swipe.left:not(.inSaved) .swipebg { background: #475569; }
 .swipe.swiping .swipebg { display: flex; }
 .swipe.armed .swipebg svg { transform: scale(1.25); }
 .swipebg svg { transition: transform .15s; }
@@ -304,3 +307,41 @@ h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; }
 .lcolor[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--ink); }
 .lswatches { padding: 10px 0 6px; }
 .listchips button { display: inline-flex; align-items: center; }
+
+/* Gesehen, Neu, Stumm */
+.card.seen .thumb, .card.seen h3 { opacity: .5; }
+.seenbtn {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -6px 0; padding: 0 2px;
+  border: none; background: none; font: inherit; font-size: 12px; color: var(--ink3); cursor: pointer;
+}
+.newtag {
+  display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; vertical-align: 1px;
+  background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+}
+.gnew { color: var(--accent); font-weight: 600; }
+.group.muted .gname, .group.muted .gcount { opacity: .55; }
+.mutedtag { font-size: 11px; font-weight: 600; color: var(--ink3); border: 1px solid var(--line2); border-radius: 6px; padding: 0 5px; vertical-align: 2px; }
+.listopt small { display: block; font-size: 12px; font-weight: 400; color: var(--ink3); margin-top: 1px; }
+
+/* Suche und Filter */
+.filters { display: flex; flex-direction: column; gap: 10px; }
+.search {
+  display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 6px 0 14px;
+  background: var(--card); border: 1px solid var(--line2); border-radius: 12px; color: var(--ink3);
+}
+.search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.search input { flex: 1; min-width: 0; min-height: 44px; border: none; background: transparent; color: var(--ink); font: inherit; font-size: 16px; outline: none; }
+.search input::-webkit-search-cancel-button { display: none; }
+.search button { flex: none; width: 40px; height: 40px; border: none; border-radius: 10px; background: transparent; color: var(--ink2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.durchips button { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; }
+.durchips button[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-ink); border-color: var(--sel-bg); }
+.durchips .seenchip[aria-pressed="true"] { background: #475569; border-color: #475569; color: #fff; }
+
+/* Veraltet-Hinweis */
+.stale {
+  border: 1px solid #F59E0B; background: rgba(245, 158, 11, .12); color: var(--ink);
+  border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.5;
+}
+.stale code { font-size: 12px; background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+.card { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.card .summary { -webkit-user-select: text; user-select: text; }

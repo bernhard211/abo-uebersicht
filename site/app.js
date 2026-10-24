@@ -28,8 +28,26 @@
     chan: store.get('chan', {}),                       // Kanal-ID -> { name, color, lists: [] }
     lists: store.get('lists', []),                     // eigene Listen, in Anzeige-Reihenfolge
     listColors: store.get('listColors', {}),           // Liste -> Farb-ID (null = keine Farbe)
-    list: 'Alle'                                       // aktiver Listen-Filter
+    list: 'Alle',                                      // aktiver Listen-Filter
+    seen: store.get('seen', {}),                       // Video-ID -> Zeitpunkt "gesehen"
+    hideSeen: store.get('hideSeen', false),            // gesehene Videos ausblenden
+    q: '',                                             // Suchbegriff
+    dur: 'alle',                                       // Dauer-Filter: alle | kurz | mittel | lang
+    showMuted: false                                   // stummgeschaltete Kanäle trotzdem zeigen
   };
+  // "Neu seit dem letzten Besuch": IDs, die beim Start dieser Sitzung schon bekannt waren
+  var sessionPrev = null;
+  function startSession() {
+    var p = store.get('knownIds', null);
+    sessionPrev = p ? p.reduce(function (o, id) { o[id] = 1; return o; }, {}) : null;
+  }
+  startSession();
+  // Gesehen-Markierungen älter als 30 Tage aufräumen
+  (function () {
+    var lim = Date.now() - 30 * 86400000;
+    Object.keys(state.seen).forEach(function (k) { if (state.seen[k] < lim) delete state.seen[k]; });
+    store.set('seen', state.seen);
+  })();
   var sheet = null;        // offenes Menü: { type: 'chan', cid, name } | { type: 'lists' }
   if (!state.order.thema) state.order.thema = [];
   if (!state.order.kanal) state.order.kanal = [];
@@ -116,7 +134,8 @@
   }
   function visibleVideos() {
     return data.videos.filter(function (v) {
-      return inRange(v) && inList(v);
+      return inRange(v) && inList(v) && durOk(v) && matchesQ(v) &&
+        (state.showMuted || !isMuted(v.channel_id)) && !(state.hideSeen && state.seen[v.id]);
     });
   }
 
@@ -157,7 +176,7 @@
   function saveChan() {
     Object.keys(state.chan).forEach(function (k) {   // leere Einträge aufräumen
       var c = state.chan[k];
-      if (!(c.lists && c.lists.length)) delete state.chan[k];
+      if (!(c.lists && c.lists.length) && !c.muted) delete state.chan[k];
     });
     Object.keys(state.listColors).forEach(function (l) { if (state.lists.indexOf(l) < 0) delete state.listColors[l]; });
     store.set('chan', state.chan);
@@ -178,6 +197,24 @@
   }
   function listCount(name) {
     return Object.keys(state.chan).filter(function (k) { return (state.chan[k].lists || []).indexOf(name) >= 0; }).length;
+  }
+  function isMuted(cid) { return !!(state.chan[cid] && state.chan[cid].muted); }
+  function isNew(v) { return !!sessionPrev && !sessionPrev[v.id] && !state.seen[v.id]; }
+  var DURS = [
+    { id: 'alle', label: 'Alle Längen' }, { id: 'kurz', label: 'unter 15 Min.' },
+    { id: 'mittel', label: '15–30 Min.' }, { id: 'lang', label: 'über 30 Min.' }
+  ];
+  function durOk(v) {
+    if (state.dur === 'alle') return true;
+    if (!v.seconds) return false;
+    var m = v.seconds / 60;
+    return state.dur === 'kurz' ? m < 15 : state.dur === 'mittel' ? m >= 15 && m <= 30 : m > 30;
+  }
+  function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function matchesQ(v) {
+    if (!state.q) return true;
+    var hay = norm(v.title + ' ' + v.channel);
+    return norm(state.q).split(/\s+/).every(function (w) { return !w || hay.indexOf(w) >= 0; });
   }
   function fallbackDigest(vids) {
     var cc = {};
@@ -206,29 +243,34 @@
   var BOX_ON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="currentColor"/><path d="M7.5 12.5l3 3 6-7" stroke="var(--card)" stroke-width="2.5"/></svg>';
   var ARROW_UP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
   var ARROW_DOWN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  var EYE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var SEARCH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
   var CHECK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
 
   function cardHtml(v, inSaved) {
     var open = !!state.open[v.id];
     var isSaved = !!state.saved[v.id];
+    var seen = !!state.seen[v.id];
     var now = Date.now();
     // In der Übersicht steht der Kanal schon im Kopf der Gruppe, in der Merkliste an der Karte
     var sub = (inSaved
       ? '<button class="chanbtn" data-chan="' + esc(v.channel_id) + '" data-cname="' + esc(v.channel) + '" aria-label="Kanal ' + esc(v.channel) + ' markieren oder einer Liste zuordnen">' +
         dotHtml(v.channel_id) + esc(v.channel) + '</button> · '
       : '') + esc(ageLabel(now - Date.parse(v.published)));
+    if (seen) sub += ' · <button class="seenbtn" data-seen="' + esc(v.id) + '" aria-label="Gesehen-Markierung entfernen">' + EYE + 'gesehen</button>';
     var dur = durLabel(v.seconds);
-    var bgLabel = inSaved || isSaved ? 'Entfernen' : 'Merken';
-    return '<div class="swipe' + (inSaved || isSaved ? ' remove' : '') + '" data-vid="' + esc(v.id) + '">' +
-      '<div class="swipebg" aria-hidden="true">' + (inSaved || isSaved ? TRASH : BOOKMARK) + '<span>' + bgLabel + '</span></div>' +
-      '<article class="card"><div class="cardtop">' +
+    var right = inSaved || isSaved ? TRASH + '<span>Entfernen</span>' : BOOKMARK + '<span>Merken</span>';
+    var left = inSaved ? '<span>Entfernen</span>' + TRASH : '<span>' + (seen ? 'Ungesehen' : 'Gesehen') + '</span>' + EYE;
+    return '<div class="swipe' + (inSaved || isSaved ? ' remove' : '') + (inSaved ? ' inSaved' : '') + '" data-vid="' + esc(v.id) + '">' +
+      '<div class="swipebg" aria-hidden="true"><span class="sbr">' + right + '</span><span class="sbl">' + left + '</span></div>' +
+      '<article class="card' + (seen ? ' seen' : '') + '"><div class="cardtop">' +
       '<div class="thumb">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
       (dur ? '<span class="dur">' + dur + '</span>' : '') + '</div>' +
-      '<div class="meta"><h3>' + esc(v.title) + '</h3><span class="sub">' + sub + '</span></div></div>' +
+      '<div class="meta"><h3>' + (!inSaved && isNew(v) ? '<span class="newtag">Neu</span>' : '') + esc(v.title) + '</h3><span class="sub">' + sub + '</span></div></div>' +
       (open ? '<p class="summary">' + esc(v.summary || 'Keine Beschreibung vorhanden.') + '</p>' : '') +
       '<div class="actions"><button data-toggle="' + esc(v.id) + '" aria-expanded="' + open + '">' +
       (open ? 'Weniger' : 'Zusammenfassung') + '</button>' +
-      '<a href="' + esc(v.url) + '" target="_blank" rel="noopener">In YouTube öffnen</a>' +
+      '<a href="' + esc(v.url) + '" target="_blank" rel="noopener" data-open="' + esc(v.id) + '">In YouTube öffnen</a>' +
       (inSaved
         ? '<button class="savebtn" data-save="' + esc(v.id) + '" aria-label="Von der Merkliste entfernen">' + TRASH + '</button>'
         : '<button class="savebtn" data-save="' + esc(v.id) + '" aria-pressed="' + isSaved + '" aria-label="' +
@@ -327,6 +369,7 @@
     list.forEach(function (v) { secs += v.seconds || 0; });
     $('stats').textContent = plural(list.length, 'Video', 'Videos') + (secs ? ' · ' + totalLabel(secs) : '');
     $('digest').hidden = true;
+    $('filters').hidden = true;
     renderToolbar(false);
     var html = '<button class="tbtn backbtn" data-act="back">← Zurück zur Übersicht</button>';
     html += list.length
@@ -336,7 +379,30 @@
     $('foot').textContent = list.length ? 'Zum Entfernen zur Seite wischen' : '';
   }
 
+  function renderFilters() {
+    $('durs').innerHTML = '<button class="seenchip" data-act="hideseen" aria-pressed="' + state.hideSeen + '">' + EYE + 'Gesehene ausblenden</button>' +
+      DURS.map(function (d) {
+        return '<button data-dur="' + d.id + '" aria-pressed="' + (state.dur === d.id) + '">' + d.label + '</button>';
+      }).join('');
+    $('qClear').hidden = !state.q;
+  }
+  // Warnung, wenn länger kein Lauf geklappt hat (Läufe alle 2 Std. von ca. 10 bis 0 Uhr)
+  function renderStale() {
+    var age = (Date.now() - Date.parse(data.generated)) / 3600000, h = new Date().getHours();
+    var stale = age > 12 || (h >= 12 && age > 4.5);
+    $('stale').hidden = !stale;
+    if (stale) {
+      $('stale').innerHTML = '<strong>Die Übersicht ist ' + (age >= 48 ? Math.floor(age / 24) + ' Tage' : Math.floor(age) + ' Std.') + ' alt.</strong> ' +
+        'Normalerweise wird sie alle 2 Stunden aktualisiert. Vermutlich ist ein Lauf bei GitHub fehlgeschlagen – schau unter Actions nach. ' +
+        'Steht dort „Google-Login fehlgeschlagen“, führe <code>auth_setup.py</code> erneut aus.';
+    }
+  }
+
   function renderList() {
+    var mainVisible = !state.locked && state.view === 'main' && !!data;
+    $('filters').hidden = !mainVisible;
+    $('stale').hidden = true;
+    $('mutedbar').hidden = true;
     if (state.locked) {
       $('digest').hidden = true; $('toolbar').hidden = true; $('groups').innerHTML = ''; $('foot').textContent = '';
       return;
@@ -344,11 +410,20 @@
     if (state.view === 'saved') { renderSaved(); return; }
     if (!data) return;
     var vids = visibleVideos();
-    var channels = {}, secs = 0;
-    vids.forEach(function (v) { channels[v.channel_id] = 1; secs += v.seconds || 0; });
-    var stats = plural(vids.length, 'neues Video', 'neue Videos') + ' · ' + plural(Object.keys(channels).length, 'Kanal', 'Kanäle');
+    var channels = {}, secs = 0, newCount = 0;
+    vids.forEach(function (v) { channels[v.channel_id] = 1; secs += v.seconds || 0; if (isNew(v)) newCount++; });
+    var stats = plural(vids.length, 'Video', 'Videos') + ' · ' + plural(Object.keys(channels).length, 'Kanal', 'Kanäle');
     if (secs) stats += ' · ' + totalLabel(secs);
+    if (newCount) stats += ' · ' + newCount + ' neu';
     $('stats').textContent = stats;
+
+    renderFilters();
+    renderStale();
+    var mutedCount = Object.keys(state.chan).filter(function (k) { return state.chan[k].muted; }).length;
+    $('mutedbar').hidden = !mutedCount;
+    $('mutedbar').innerHTML = mutedCount
+      ? plural(mutedCount, 'Kanal', 'Kanäle') + ' stummgeschaltet · <button class="linkbtn" data-act="showmuted">' + (state.showMuted ? 'wieder ausblenden' : 'anzeigen') + '</button>'
+      : '';
 
     // "Kurz gesagt" nur für abgeschlossene Tage (bis gestern), nicht für "Heute"
     var digest = '';
@@ -374,14 +449,16 @@
     var html = groupNames.map(function (n, gi) {
       var list = groups[n], gsec = 0;
       list.forEach(function (v) { gsec += v.seconds || 0; });
-      var open = !state.editing && !!state.expanded[n];
-      var count = plural(list.length, 'Video', 'Videos') + (gsec ? ' · ' + totalLabel(gsec) : '');
-      var cid = list[0].channel_id;
-      return '<section class="group' + (open ? ' open' : '') + '" data-gi="' + gi + '">' +
+      var open = !state.editing && (!!state.expanded[n] || !!state.q);
+      var gnew = list.filter(isNew).length;
+      var count = plural(list.length, 'Video', 'Videos') + (gsec ? ' · ' + totalLabel(gsec) : '') +
+        (gnew ? ' · <span class="gnew">' + gnew + ' neu</span>' : '');
+      var cid = list[0].channel_id, muted = isMuted(cid);
+      return '<section class="group' + (open ? ' open' : '') + (muted ? ' muted' : '') + '" data-gi="' + gi + '">' +
         '<div class="ghead">' +
         (state.editing ? '<span class="handle" data-handle="' + gi + '" aria-hidden="true">' + GRIP + '</span>' : '') +
         '<button class="gtoggle" data-expand="' + gi + '" aria-expanded="' + open + '"' + (state.editing ? ' tabindex="-1"' : '') + '>' +
-        '<span class="gtext"><span class="gname">' + (cid ? dotHtml(cid) : '') + esc(n) + '</span><span class="gcount">' + count + '</span></span>' + (state.editing ? '' : CHEV) + '</button>' +
+        '<span class="gtext"><span class="gname">' + (cid ? dotHtml(cid) : '') + esc(n) + (muted ? ' <span class="mutedtag">stumm</span>' : '') + '</span><span class="gcount">' + count + '</span></span>' + (state.editing ? '' : CHEV) + '</button>' +
         (cid && !state.editing ? '<button class="gmenu" data-chan="' + esc(cid) + '" data-cname="' + esc(n) + '" aria-label="Kanal ' + esc(n) + ' markieren oder einer Liste zuordnen">' + DOTS + '</button>' : '') +
         '</div>' +
         (open ? '<div class="cards">' + list.map(function (v) { return cardHtml(v, false); }).join('') + '</div>' : '') +
@@ -389,7 +466,10 @@
     }).join('');
 
     if (!vids.length) {
-      html = '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum oder eine andere Liste.</p></div>';
+      var filtered = state.q || state.dur !== 'alle' || state.hideSeen || state.list !== 'Alle';
+      html = filtered
+        ? '<div class="empty"><h2>Keine Treffer</h2><p>Suche, Dauer, Liste oder „Gesehene ausblenden“ anpassen.</p></div>'
+        : '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum.</p></div>';
     }
     $('groups').innerHTML = html;
     $('groups').classList.toggle('editing', state.editing);
@@ -432,6 +512,17 @@
     render();
     if (was) toast('Von der Merkliste entfernt', function () { setSaved(snapshot, true); render(); });
     else toast('Auf die Merkliste gesetzt', function () { setSaved(v, false); render(); });
+  }
+
+  function toggleSeen(id) {
+    var was = state.seen[id];
+    if (was) delete state.seen[id]; else state.seen[id] = Date.now();
+    store.set('seen', state.seen);
+    renderList();
+    toast(was ? 'Als ungesehen markiert' : 'Als gesehen markiert', function () {
+      if (was) state.seen[id] = was; else delete state.seen[id];
+      store.set('seen', state.seen); renderList();
+    });
   }
 
   // ---------------------------------------------------------------- Tage abhaken
@@ -494,6 +585,9 @@
             }).join('') + '</div>'
           : '<p class="hint2">Noch keine Listen. Leg unten eine an – der Kanal kommt gleich mit hinein.</p>') +
         '<p class="hint2">Der Kanal bekommt die Farbe seiner Listen. Farben änderst du unter „Listen bearbeiten“ (Stift).</p>' +
+        '<h3>Anzeige</h3>' +
+        '<button class="listopt" data-act="mute" aria-pressed="' + !!c.muted + '">' + (c.muted ? BOX_ON : BOX) +
+        '<span>Kanal stummschalten<small>Videos erscheinen nicht mehr in der Übersicht</small></span></button>' +
         newListForm();
     } else {
       html += '<h2 id="sheetTitle">Listen bearbeiten</h2>' +
@@ -577,6 +671,7 @@
   }
   function applyData(d) {
     data = d;
+    store.set('knownIds', d.videos.map(function (v) { return v.id; }));
     state.locked = false;
     if (state.range > d.max_days) state.range = d.max_days;
     render();
@@ -610,6 +705,13 @@
   var suppress = { until: 0, el: null };   // Klick direkt nach Langdruck oder Wischen ignorieren
   function suppressOn(el) { suppress = { until: Date.now() + 400, el: el }; }
   document.addEventListener('click', function (e) {
+    // "In YouTube öffnen" markiert das Video als gesehen (Link öffnet trotzdem normal)
+    var openLink = e.target.closest('a[data-open]');
+    if (openLink && !(Date.now() < suppress.until && suppress.el && suppress.el.contains(openLink))) {
+      var oid = openLink.dataset.open;
+      if (!state.seen[oid]) { state.seen[oid] = Date.now(); store.set('seen', state.seen); setTimeout(renderList, 300); }
+      return;
+    }
     if (Date.now() < suppress.until && suppress.el && suppress.el.contains(e.target)) {
       suppress.until = 0; e.preventDefault(); return;
     }
@@ -619,6 +721,18 @@
     if (b.id === 'toastUndo') { var f = undoFn; $('toast').hidden = true; undoFn = null; if (f) f(); return; }
     if (b.id === 'refresh') { load(); return; }
     if (ds.act === 'export') { exportBackup(); return; }
+    if (ds.dur) { state.dur = ds.dur; renderList(); return; }
+    if (ds.act === 'hideseen') { state.hideSeen = !state.hideSeen; store.set('hideSeen', state.hideSeen); renderList(); return; }
+    if (ds.act === 'showmuted') { state.showMuted = !state.showMuted; renderList(); return; }
+    if (b.id === 'qClear') { $('q').value = ''; state.q = ''; renderList(); $('q').focus(); return; }
+    if (ds.seen) { toggleSeen(ds.seen); return; }
+    if (sheet && ds.act === 'mute') {
+      var mc = editChan(sheet.cid, sheet.name);
+      mc.muted = !mc.muted;
+      saveChan(); render(); renderSheet();
+      toast(mc.muted ? '„' + sheet.name + '“ stummgeschaltet' : '„' + sheet.name + '“ wieder sichtbar');
+      return;
+    }
     if (ds.act === 'import') { $('backupFile').click(); return; }
     if (ds.act === 'lock') { store.set('key', null); state.view = 'main'; showLock(); window.scrollTo(0, 0); return; }
     if (b.id === 'digestToggle') {
@@ -738,9 +852,9 @@
       if (Math.abs(dx) < 12) return;
       sw.active = true;
       sw.wrap.classList.add('swiping');
+      try { window.getSelection().removeAllRanges(); } catch (err) { /* egal */ }
       try { sw.el.setPointerCapture(e.pointerId); } catch (err) { /* egal */ }
     }
-    if (state.view === 'main' && dx < 0) dx = dx / 4;   // in der Übersicht nur nach rechts
     sw.dx = dx;
     sw.el.style.transform = 'translateX(' + dx + 'px)';
     sw.wrap.classList.toggle('left', dx < 0);
@@ -751,7 +865,8 @@
     var s = sw; sw = null;
     if (!s.active) return;
     suppressOn(s.wrap);
-    var trigger = !cancelled && (state.view === 'main' ? s.dx > 90 : Math.abs(s.dx) > 90);
+    var trigger = !cancelled && Math.abs(s.dx) > 90;
+    var seenSwipe = trigger && state.view === 'main' && s.dx < 0;
     s.el.style.transition = 'transform .18s ease-out';
     if (trigger && state.view === 'saved') {
       s.el.style.transform = 'translateX(' + (s.dx > 0 ? 1 : -1) * window.innerWidth + 'px)';
@@ -762,7 +877,8 @@
     setTimeout(function () {
       s.wrap.classList.remove('swiping', 'armed', 'left');
       s.el.style.transition = '';
-      if (trigger) toggleSaved(s.id);
+      if (seenSwipe) toggleSeen(s.id);
+      else if (trigger) toggleSaved(s.id);
     }, 180);
   }
   window.addEventListener('pointerup', function () { endSwipe(false); });
@@ -827,7 +943,8 @@
   // Alles, was nur auf diesem Gerät liegt – ohne den Passwort-Schlüssel
   var BACKUP_KEYS = {
     lists: 'array', listColors: 'object', chan: 'object', saved: 'object',
-    done: 'array', order: 'object', sort: 'string', theme: 'string', digestOpen: 'boolean'
+    done: 'array', order: 'object', sort: 'string', theme: 'string', digestOpen: 'boolean',
+    seen: 'object', hideSeen: 'boolean'
   };
   function typeOk(v, t) { return t === 'array' ? Array.isArray(v) : (t === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === t); }
   function backupData() {
@@ -876,6 +993,13 @@
     reader.onerror = function () { toast('Datei konnte nicht gelesen werden.'); };
     reader.readAsText(f);
   }
+  $('q').addEventListener('input', function () { state.q = this.value.trim(); renderList(); });
+  // Nach längerer Pause (App im Hintergrund) gilt das Öffnen als neuer Besuch
+  var hiddenAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 30 * 60000 && !state.locked) { startSession(); load(); }
+  });
   $('backupFile').addEventListener('change', function () {
     var f = this.files && this.files[0];
     if (f) importBackup(f);
