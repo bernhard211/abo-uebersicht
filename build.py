@@ -26,6 +26,7 @@ import sys
 import threading
 import time
 import tomllib
+from zoneinfo import ZoneInfo
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -206,6 +207,9 @@ def extract_json(text: str):
     return json.loads(text[start:])
 
 
+EFFORT = "low"   # wird in main() aus config.toml gesetzt
+
+
 def claude_json(client, model: str, user: str, schema: dict, max_tokens: int = 16000,
                 system: str = "Antworte ausschließlich mit JSON nach dem vorgegebenen Schema."):
     """Fragt Claude und bekommt garantiert JSON nach `schema` zurück (Structured Outputs).
@@ -213,10 +217,10 @@ def claude_json(client, model: str, user: str, schema: dict, max_tokens: int = 1
     Das Nachdenken (adaptive thinking) wird abgeschaltet: Es verbraucht sonst das Antwortbudget
     und schneidet die Antwort ab. Über extra_body, damit es mit jeder SDK-Version funktioniert.
     """
-    extra = {
-        "thinking": {"type": "disabled"},
-        "output_config": {"format": {"type": "json_schema", "schema": schema}},
-    }
+    output_config = {"format": {"type": "json_schema", "schema": schema}}
+    if EFFORT:
+        output_config["effort"] = EFFORT
+    extra = {"thinking": {"type": "disabled"}, "output_config": output_config}
     resp = client.messages.create(
         model=model, max_tokens=max_tokens, system=system,
         messages=[{"role": "user", "content": user}],
@@ -351,19 +355,39 @@ def summarize_videos(client, cfg: dict, videos: list[dict], cache: dict) -> None
             log(f"  Zusammengefasst: {stats['ok']}/{len(todo)}" + (f" ({stats['fail']} fehlgeschlagen)" if stats["fail"] else ""))
 
 
-def make_digests(client, cfg: dict, videos: list[dict], now: dt.datetime) -> dict[str, str]:
-    """Ein 'Kurz gesagt'-Text pro Zeitraum 1..max_days in einer Anfrage."""
-    if not videos:
+DIGEST_FILE = ROOT / "data" / "digests.json"
+WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
+def make_digests(client, cfg: dict, videos: list[dict], today: dt.date, tz) -> dict[str, str]:
+    """'Kurz gesagt' pro Zeitraum 1..max_days – nur aus abgeschlossenen Tagen (bis gestern 24 Uhr).
+
+    Wird einmal pro Kalendertag erzeugt und für alle weiteren Läufe des Tages wiederverwendet.
+    """
+    if DIGEST_FILE.exists():
+        saved = json.loads(DIGEST_FILE.read_text("utf-8"))
+        if saved.get("date") == today.isoformat() and saved.get("digests"):
+            log("Kurz gesagt: von heute schon vorhanden, wird wiederverwendet")
+            return saved["digests"]
+    max_days = cfg["max_days"]
+    items = []
+    for v in videos:
+        day = parse_time(v["published"]).astimezone(tz).date()
+        back = (today - day).days
+        if 1 <= back <= max_days:
+            items.append({"tage_zurueck": back, "kanal": v["channel"], "titel": v["title"], "thema": v["topic"]})
+    if not items:
         return {}
-    items = [{"tage_alt": round((now - parse_time(v["published"])).total_seconds() / 86400, 1),
-              "kanal": v["channel"], "titel": v["title"], "thema": v["topic"]} for v in videos]
-    days = [str(d) for d in range(1, cfg["max_days"] + 1)]
+    days = [str(d) for d in range(1, max_days + 1)]
+    names = ", ".join(f"{d} = ab {WD[(today - dt.timedelta(days=int(d))).weekday()]} "
+                      f"{(today - dt.timedelta(days=int(d))):%d.%m.}" for d in days)
     user = (
-        f"Hier sind neue Videos aus meinen Abos (tage_alt = vor wie vielen Tagen erschienen):\n"
+        "Hier sind Videos aus meinen Abos der letzten Tage "
+        "(tage_zurueck: 1 = gestern, 2 = vorgestern usw.; heute ist nicht dabei):\n"
         f"{json.dumps(items, ensure_ascii=False, indent=0)}\n\n"
-        f"Schreibe für jeden Zeitraum {', '.join(days)} Tage (= alle Videos mit tage_alt <= Zeitraum) einen "
-        "kurzen Überblick auf Deutsch, 2–3 Sätze, locker und konkret: Schwerpunkte, auffällige Kanäle "
-        "und welches Video sich am meisten lohnt. Keine Aufzählung aller Titel. "
+        f"Schreibe für jeden Zeitraum ({names}, jeweils bis gestern) einen kurzen Überblick auf Deutsch, "
+        "2–3 Sätze, locker und konkret: Schwerpunkte, auffällige Kanäle und welches Video sich am meisten "
+        "lohnt. Zeitraum N umfasst alle Videos mit tage_zurueck <= N. Keine Aufzählung aller Titel. "
         "Gibt es in einem Zeitraum keine Videos, schreibe einen leeren Text."
     )
     schema = {
@@ -374,10 +398,15 @@ def make_digests(client, cfg: dict, videos: list[dict], now: dt.datetime) -> dic
     }
     try:
         data = claude_json(client, cfg["llm"]["model"], user, schema, 8000)
-        return {k: str(v).strip() for k, v in data.items() if k in days and str(v).strip()}
-    except Exception as e:  # noqa: BLE001
-        log(f"  ! Überblick: {e}")
+    except Exception as e:  # noqa: BLE001 – nächster Lauf versucht es erneut
+        log(f"  ! Kurz gesagt: {e}")
         return {}
+    digests = {k: str(v).strip() for k, v in data.items() if k in days and str(v).strip()}
+    DIGEST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DIGEST_FILE.write_text(json.dumps({"date": today.isoformat(), "digests": digests},
+                                      ensure_ascii=False, indent=1), "utf-8")
+    log(f"Kurz gesagt: neu erstellt für {today:%d.%m.%Y} (bis gestern)")
+    return digests
 
 
 # ---------------------------------------------------------------- Hauptablauf
@@ -391,8 +420,13 @@ def main() -> int:
 
     with open(ROOT / "config.toml", "rb") as f:
         cfg = tomllib.load(f)
+    global EFFORT
+    EFFORT = cfg.get("llm", {}).get("effort", "low") or None
+    tz = ZoneInfo(cfg.get("timezone", "Europe/Berlin"))
     now = parse_time(args.now) if args.now else dt.datetime.now(dt.timezone.utc)
-    cutoff = now - dt.timedelta(days=cfg["max_days"])
+    today = now.astimezone(tz).date()
+    # Ganze Kalendertage: heute ab 0 Uhr plus max_days volle Tage davor
+    cutoff = dt.datetime.combine(today - dt.timedelta(days=cfg["max_days"]), dt.time(), tzinfo=tz)
 
     token = None
     subs: list[dict] = []
@@ -434,7 +468,7 @@ def main() -> int:
             if cfg.get("include_shorts") or not v["is_short"]:
                 videos.append(v)
     videos.sort(key=lambda v: v["published"], reverse=True)
-    log(f"{len(videos)} neue Videos in {cfg['max_days']} Tagen")
+    log(f"{len(videos)} neue Videos seit {cutoff:%d.%m.} 0 Uhr")
 
     yt_key = os.environ.get("YT_API_KEY")
     durations = {}
@@ -454,7 +488,7 @@ def main() -> int:
         summarize_videos(client, cfg, videos, cache)
         for v in videos:
             v["topic"] = cache.get(v["id"], {}).get("topic", FALLBACK_TOPIC)
-        digests = make_digests(client, cfg, videos, now)
+        digests = make_digests(client, cfg, videos, today, tz)
     else:
         log("Kein ANTHROPIC_API_KEY – Beschreibung statt Zusammenfassung, ohne Themen")
 
@@ -480,6 +514,7 @@ def main() -> int:
     topics_used = [t for t in (cfg.get("topics") or []) + [FALLBACK_TOPIC] if any(v["topic"] == t for v in out_videos)]
     data = {
         "generated": now.isoformat(),
+        "timezone": cfg.get("timezone", "Europe/Berlin"),
         "max_days": cfg["max_days"],
         "subscriptions": len(subs),
         "topics": topics_used,

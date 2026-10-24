@@ -1,7 +1,10 @@
 # Einstellungen für die Abo-Übersicht
 
-# Wie viele Tage zurück gesammelt wird (die App lässt dich dann 1 bis max_days wählen)
+# Wie viele volle Tage zurück gesammelt werden (die App bietet "Heute" und 1 bis max_days)
 max_days = 7
+
+# Zeitzone für Tagesgrenzen ("Heute", "Kurz gesagt" bis gestern)
+timezone = "Europe/Berlin"
 
 # Shorts ausblenden?
 include_shorts = false
@@ -21,3 +24,5 @@ topics = []
 model = "claude-haiku-5-5"
 # Wie viele Videos pro Anfrage zusammengefasst werden
 batch_size = 15
+# Aufwand pro Antwort: "low" (sparsam, knapper), "medium", "high"
+effort = "low"
