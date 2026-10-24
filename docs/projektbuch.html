@@ -253,7 +253,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
           <li>Kanäle über <b>⋯</b> einer oder mehreren Listen zuordnen. Ein Kanal zeigt die Punkte all seiner Listen.</li>
           <li><b>Mehrfachauswahl</b> im Filter: gezeigt werden Kanäle aus mindestens einer gewählten Liste.</li>
           <li>Listen umbenennen, löschen (mit Rückgängig), Farbe ändern und per ↑↓ <b>umsortieren</b>.</li>
-          <li>Kanal-Sortierung <b>Listen</b> (mit Zwischenüberschriften, „Ohne Liste“ unten), <b>Anzahl</b> oder <b>Eigene</b> per Ziehen.</li>
+          <li>Kanal-Sortierung <b>Listen</b> (mit Zwischenüberschriften, „Ohne Liste“ unten) oder <b>Anzahl</b>. Mit <b>Ordnen</b> Kanäle innerhalb ihrer Liste frei verschieben, die Reihenfolge wird pro Liste gespeichert.</li>
           <li>Kanäle <b>stummschalten</b>, bei Bedarf wieder einblenden.</li>
         </ul>
       </article>
@@ -452,7 +452,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <tr><td class="k">GitHub Secrets</td><td><code>YT_CLIENT_ID</code>, <code>YT_CLIENT_SECRET</code>, <code>YT_REFRESH_TOKEN</code>, <code>ANTHROPIC_API_KEY</code>, <code>APP_PASSWORD</code>, optional <code>YT_API_KEY</code>, <code>SUBSCRIPTIONS_CSV</code></td><td>nur die eigenen Läufe</td></tr>
             <tr><td class="k">Actions-Cache</td><td><code>data/cache.json</code> (Zusammenfassungen im Zeitfenster), <code>data/digests.json</code> („Kurz gesagt“ des Tages)</td><td>nur die eigenen Läufe</td></tr>
             <tr><td class="k">GitHub Pages</td><td>App-Dateien und <code>data.json</code>, AES-verschlüsselt</td><td>öffentlich, aber ohne Passwort unlesbar</td></tr>
-            <tr><td class="k">Handy (localStorage)</td><td><code>saved</code>, <code>seen</code>, <code>done</code>, <code>lists</code>, <code>listColors</code>, <code>chan</code>, <code>order</code>, <code>sort</code>, <code>savedSort</code>, <code>savedOrder</code>, <code>hideSeen</code>, <code>theme</code>, <code>digestOpen</code>, <code>knownIds</code>, <code>key</code>; jeweils mit Präfix <code>abo.</code></td><td>nur dieses Gerät, sicherbar als Datei (ohne <code>key</code>)</td></tr>
+            <tr><td class="k">Handy (localStorage)</td><td><code>saved</code>, <code>seen</code>, <code>done</code>, <code>lists</code>, <code>listColors</code>, <code>chan</code>, <code>listOrder</code>, <code>sort</code>, <code>savedSort</code>, <code>savedOrder</code>, <code>hideSeen</code>, <code>theme</code>, <code>digestOpen</code>, <code>knownIds</code>, <code>key</code>; jeweils mit Präfix <code>abo.</code></td><td>nur dieses Gerät, sicherbar als Datei (ohne <code>key</code>)</td></tr>
           </tbody>
         </table>
       </div>

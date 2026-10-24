@@ -120,10 +120,10 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
 
 **Übersicht**
 - Immer **nach Kanal gruppiert**. Gruppen starten **eingeklappt**: Name mit Farbpunkten, darunter „3 Videos · 59 Min. · 1 neu“, rechts Pfeil und ⋯.
-- Werkzeugleiste mit Sortierung **Listen | Anzahl | Eigene** und „Alle auf/zu“.
-  - **Listen** (ganz links): Reihenfolge der Listen-Filter, mit kleinen Zwischenüberschriften (Farbpunkt + Listenname), Kanäle ohne Liste unten unter „Ohne Liste“. Ein Kanal in mehreren Listen erscheint einmal, bei seiner ersten (bei aktivem Filter: ersten gewählten) Liste.
+- Werkzeugleiste mit Sortierung **Listen | Anzahl** und „Alle auf/zu“.
+  - **Listen** (ganz links, Standard): Reihenfolge der Listen-Filter, mit kleinen Zwischenüberschriften (Farbpunkt + Listenname), Kanäle ohne Liste unten unter „Ohne Liste“. Ein Kanal in mehreren Listen erscheint einmal, bei seiner ersten (bei aktivem Filter: ersten gewählten) Liste.
+  - **Ordnen** (nur bei „Listen“): Kanäle am Griff ziehen (Pointer Events), **nur innerhalb ihrer Liste** bzw. innerhalb „Ohne Liste“. Reihenfolge **pro Liste** speichern (Kanal-IDs). Gerade nicht sichtbare Kanäle behalten ihren Platz, neue Kanäle landen unten. Beim Umbenennen/Löschen einer Liste mitziehen.
   - **Anzahl**: nach Videoanzahl.
-  - **Eigene**: mit „Ordnen“ Gruppen am Griff ziehen (Pointer Events), gespeichert.
 - **„Kurz gesagt“**-Karte (dunkel, Stern-Symbol, Zusatz „bis gestern“, einklappbar, Zustand gespeichert). Nur bei Zeitraum ≥ 1. Ohne Listen-Filter der Claude-Text, sonst eine einfache Auswertung (Anzahl, aktivste Kanäle) der gefilterten, abgeschlossenen Tage.
 - **Filterzeile:** runder **Such-Knopf** (öffnet Suchfeld mit ×, Suche nach Titel/Kanal, mehrere Wörter, akzent-unabhängig; Treffer klappen auf), „**Gesehene ausblenden**“ (gespeichert), **Dauer**: Alle / unter 15 / 15–30 / über 30 Min.
 - **Veraltet-Warnung** (gelb): tagsüber ab 12 Uhr bei Alter > 4,5 Std., sonst > 12 Std., mit Tipps (Actions prüfen, ggf. `auth_setup.py` erneut).

@@ -18,7 +18,8 @@
     open: {},                  // aufgeklappte Zusammenfassungen
     expanded: {},              // aufgeklappte Gruppen – beim Start alle zu
     editing: false,
-    sort: store.get('sort', 'anzahl'),                 // 'anzahl' | 'eigene'
+    sort: store.get('sort', 'listen') === 'anzahl' ? 'anzahl' : 'listen',   // 'listen' | 'anzahl'
+    listOrder: store.get('listOrder', {}),             // Liste (bzw. '' = ohne Liste) -> Kanal-IDs in eigener Reihenfolge
     order: store.get('order', { thema: [], kanal: [] }),
     saved: store.get('saved', {}),                     // id -> Video (+ savedAt)
     done: store.get('done', []),                       // abgehakte Kalendertage 'YYYY-MM-DD'
@@ -185,6 +186,8 @@
       if (!(c.lists && c.lists.length) && !c.muted) delete state.chan[k];
     });
     Object.keys(state.listColors).forEach(function (l) { if (state.lists.indexOf(l) < 0) delete state.listColors[l]; });
+    Object.keys(state.listOrder).forEach(function (l) { if (l && state.lists.indexOf(l) < 0) delete state.listOrder[l]; });
+    store.set('listOrder', state.listOrder);
     store.set('chan', state.chan);
     store.set('lists', state.lists);
     store.set('listColors', state.listColors);
@@ -389,24 +392,29 @@
     var byCount = function (a, b) {
       return groups[b].length - groups[a].length || a.localeCompare(b, 'de');
     };
-    if (state.sort === 'listen') {
-      return names.sort(function (a, b) {
-        return listRank(groups[a][0].channel_id) - listRank(groups[b][0].channel_id) || byCount(a, b);
-      });
-    }
-    if (state.sort !== 'eigene') return names.sort(byCount);
-    var ord = state.order[state.group];
-    var known = names.filter(function (n) { return ord.indexOf(n) >= 0; })
-      .sort(function (a, b) { return ord.indexOf(a) - ord.indexOf(b); });
-    var rest = names.filter(function (n) { return ord.indexOf(n) < 0; }).sort(byCount);
-    return known.concat(rest);
+    if (state.sort !== 'listen') return names.sort(byCount);
+    // Nach Listen-Reihenfolge, innerhalb einer Liste nach eigener Reihenfolge (neue Kanäle unten, nach Anzahl)
+    var pos = function (n) {
+      var cid = groups[n][0].channel_id, ord = state.listOrder[secKey(listOf(cid))] || [], i = ord.indexOf(cid);
+      return i < 0 ? 1e6 : i;
+    };
+    return names.sort(function (a, b) {
+      return listRank(groups[a][0].channel_id) - listRank(groups[b][0].channel_id) || pos(a) - pos(b) || byCount(a, b);
+    });
+  }
+  function secKey(listName) { return listName === null ? '' : listName; }
+  // Neue Reihenfolge der sichtbaren Kanäle übernehmen; gerade nicht sichtbare behalten ihren Platz
+  function mergeOrder(old, visible) {
+    var vis = {}, q = visible.slice(), base = (old || []).slice();
+    visible.forEach(function (id) { vis[id] = 1; if (base.indexOf(id) < 0) base.push(id); });
+    return base.map(function (id) { return vis[id] ? q.shift() : id; });
   }
 
   function renderToolbar(hasGroups) {
     if (state.view === 'saved' || !hasGroups) { $('toolbar').innerHTML = ''; $('toolbar').hidden = true; return; }
     $('toolbar').hidden = false;
     if (state.editing) {
-      $('toolbar').innerHTML = '<span class="label" style="font-size:13px;color:var(--ink2)">Am Griff ziehen zum Sortieren</span>' +
+      $('toolbar').innerHTML = '<span class="label" style="font-size:13px;color:var(--ink2)">Kanäle innerhalb ihrer Liste am Griff ziehen</span>' +
         '<span class="spacer"></span><button class="tbtn primary" data-act="edit">Fertig</button>';
       return;
     }
@@ -414,10 +422,9 @@
     $('toolbar').innerHTML =
       '<div class="sortseg" role="group" aria-label="Sortierung">' +
       '<button data-sort="listen" aria-pressed="' + (state.sort === 'listen') + '">Listen</button>' +
-      '<button data-sort="anzahl" aria-pressed="' + (state.sort === 'anzahl') + '">Anzahl</button>' +
-      '<button data-sort="eigene" aria-pressed="' + (state.sort === 'eigene') + '">Eigene</button></div>' +
+      '<button data-sort="anzahl" aria-pressed="' + (state.sort === 'anzahl') + '">Anzahl</button></div>' +
       '<span class="spacer"></span>' +
-      (state.sort === 'eigene' ? '<button class="tbtn" data-act="edit">' + GRIP.replace('width="20" height="20"', 'width="16" height="16"') + 'Ordnen</button>' : '') +
+      (state.sort === 'listen' ? '<button class="tbtn" data-act="edit">' + GRIP.replace('width="20" height="20"', 'width="16" height="16"') + 'Ordnen</button>' : '') +
       '<button class="tbtn" data-act="expandall">' + (anyOpen ? 'Alle zu' : 'Alle auf') + '</button>';
   }
 
@@ -551,13 +558,13 @@
     var groups = {};
     vids.forEach(function (v) { (groups[v.channel] = groups[v.channel] || []).push(v); });
     groupNames = orderedNames(groups);
+    state.lastGroups = groups;
     renderToolbar(groupNames.length > 0);
 
     var lastSection;
     var html = groupNames.map(function (n, gi) {
-      var list = groups[n], gsec = 0, head = '';
-      if (state.sort === 'listen' && !state.editing && state.lists.length) {
-        var sec = listOf(list[0].channel_id);
+      var list = groups[n], gsec = 0, head = '', sec = listOf(list[0].channel_id);
+      if (state.sort === 'listen' && state.lists.length) {
         if (sec !== lastSection) {
           lastSection = sec;
           head = '<h3 class="lsection">' + (sec === null ? 'Ohne Liste' : dot(listColor(sec)) + esc(sec)) + '</h3>';
@@ -569,7 +576,7 @@
       var count = plural(list.length, 'Video', 'Videos') + (gsec ? ' · ' + totalLabel(gsec) : '') +
         (gnew ? ' · <span class="gnew">' + gnew + ' neu</span>' : '');
       var cid = list[0].channel_id, muted = isMuted(cid);
-      return head + '<section class="group' + (open ? ' open' : '') + (muted ? ' muted' : '') + '" data-gi="' + gi + '">' +
+      return head + '<section class="group' + (open ? ' open' : '') + (muted ? ' muted' : '') + '" data-gi="' + gi + '" data-sec="' + esc(secKey(sec)) + '">' +
         '<div class="ghead">' +
         (state.editing ? '<span class="handle" data-handle="' + gi + '" aria-hidden="true">' + GRIP + '</span>' : '') +
         '<button class="gtoggle" data-expand="' + gi + '" aria-expanded="' + open + '"' + (state.editing ? ' tabindex="-1"' : '') + '>' +
@@ -729,14 +736,15 @@
   }
   function deleteList(name) {
     if (!name) return;
-    var snapLists = state.lists.slice(), snapChan = JSON.parse(JSON.stringify(state.chan)), snapColors = JSON.parse(JSON.stringify(state.listColors));
+    var snapLists = state.lists.slice(), snapChan = JSON.parse(JSON.stringify(state.chan)), snapColors = JSON.parse(JSON.stringify(state.listColors)),
+      snapOrder = JSON.parse(JSON.stringify(state.listOrder));
     if (sheet) sheet.colorFor = null;
     state.lists = state.lists.filter(function (l) { return l !== name; });
     Object.keys(state.chan).forEach(function (k) {
       state.chan[k].lists = (state.chan[k].lists || []).filter(function (l) { return l !== name; });
     });
     saveChan(); render(); renderSheet();
-    toast('Liste „' + name + '“ gelöscht', function () { state.lists = snapLists; state.chan = snapChan; state.listColors = snapColors; saveChan(); render(); renderSheet(); });
+    toast('Liste „' + name + '“ gelöscht', function () { state.lists = snapLists; state.chan = snapChan; state.listColors = snapColors; state.listOrder = snapOrder; saveChan(); render(); renderSheet(); });
   }
   function renameList(i, name) {
     var old = state.lists[i];
@@ -745,6 +753,7 @@
     state.lists[i] = name;
     state.listColors[name] = state.listColors[old] === undefined ? null : state.listColors[old];
     delete state.listColors[old];
+    if (state.listOrder[old]) { state.listOrder[name] = state.listOrder[old]; delete state.listOrder[old]; }
     Object.keys(state.chan).forEach(function (k) {
       var ls = state.chan[k].lists || [], j = ls.indexOf(old);
       if (j >= 0) ls[j] = name;
@@ -930,7 +939,7 @@
     if (ds.sort) { state.sort = ds.sort; store.set('sort', state.sort); renderList(); return; }
     if (ds.act === 'edit') {
       state.editing = !state.editing;
-      if (state.editing) { state.sort = 'eigene'; store.set('sort', 'eigene'); }
+      if (state.editing) { state.sort = 'listen'; store.set('sort', 'listen'); }
       renderList(); return;
     }
     if (ds.act === 'expandall') {
@@ -1026,7 +1035,7 @@
   window.addEventListener('pointerup', function () { endSwipe(false); });
   window.addEventListener('pointercancel', function () { endSwipe(true); });
 
-  // ---------------------------------------------------------------- Gruppen verschieben
+  // ---------------------------------------------------------------- Kanäle innerhalb ihrer Liste verschieben
   var drag = null;
   list.addEventListener('pointerdown', function (e) {
     var h = e.target.closest('[data-handle]');
@@ -1034,25 +1043,27 @@
     e.preventDefault();
     var sec = h.closest('.group');
     sec.classList.add('dragging');
-    drag = { sec: sec, pid: e.pointerId };
+    drag = { sec: sec, key: sec.dataset.sec, pid: e.pointerId };
     try { h.setPointerCapture(e.pointerId); } catch (err) { /* egal */ }
   });
+  function sameSection(el) { return el && el.classList && el.classList.contains('group') && el.dataset.sec === drag.key; }
   window.addEventListener('pointermove', function (e) {
     if (!drag || e.pointerId !== drag.pid) return;
     var y = e.clientY, sec = drag.sec;
     var prev = sec.previousElementSibling, next = sec.nextElementSibling;
-    if (prev) { var r = prev.getBoundingClientRect(); if (y < r.top + r.height / 2) { sec.parentNode.insertBefore(sec, prev); } }
-    if (next) { var q = next.getBoundingClientRect(); if (y > q.top + q.height / 2) { sec.parentNode.insertBefore(next, sec); } }
+    if (sameSection(prev)) { var r = prev.getBoundingClientRect(); if (y < r.top + r.height / 2) sec.parentNode.insertBefore(sec, prev); }
+    if (sameSection(next)) { var q = next.getBoundingClientRect(); if (y > q.top + q.height / 2) sec.parentNode.insertBefore(next, sec); }
     if (y < 70) window.scrollBy(0, -12); else if (y > window.innerHeight - 70) window.scrollBy(0, 12);
   });
   function endDrag() {
     if (!drag) return;
+    var key = drag.key;
     drag.sec.classList.remove('dragging');
     drag = null;
-    var visible = Array.prototype.map.call(document.querySelectorAll('#groups .group'), function (s) { return groupNames[+s.dataset.gi]; });
-    var rest = state.order[state.group].filter(function (n) { return visible.indexOf(n) < 0; });
-    state.order[state.group] = visible.concat(rest);
-    store.set('order', state.order);
+    var visible = Array.prototype.filter.call(document.querySelectorAll('#groups .group'), function (s) { return s.dataset.sec === key; })
+      .map(function (s) { return state.lastGroups[groupNames[+s.dataset.gi]][0].channel_id; });
+    state.listOrder[key] = mergeOrder(state.listOrder[key], visible);
+    store.set('listOrder', state.listOrder);
     renderList();
   }
   window.addEventListener('pointerup', endDrag);
@@ -1115,7 +1126,7 @@
   var BACKUP_KEYS = {
     lists: 'array', listColors: 'object', chan: 'object', saved: 'object',
     done: 'array', order: 'object', sort: 'string', theme: 'string', digestOpen: 'boolean',
-    seen: 'object', hideSeen: 'boolean', savedSort: 'string', savedOrder: 'array'
+    seen: 'object', hideSeen: 'boolean', savedSort: 'string', savedOrder: 'array', listOrder: 'object'
   };
   function typeOk(v, t) { return t === 'array' ? Array.isArray(v) : (t === 'object' ? v && typeof v === 'object' && !Array.isArray(v) : typeof v === t); }
   function backupData() {
