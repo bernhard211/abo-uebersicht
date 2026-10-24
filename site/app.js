@@ -28,7 +28,8 @@
     chan: store.get('chan', {}),                       // Kanal-ID -> { name, color, lists: [] }
     lists: store.get('lists', []),                     // eigene Listen, in Anzeige-Reihenfolge
     listColors: store.get('listColors', {}),           // Liste -> Farb-ID (null = keine Farbe)
-    list: 'Alle',                                      // aktiver Listen-Filter
+    sel: [],                                           // gewählte Listen-Filter (leer = alle Kanäle)
+    searchOpen: false,                                 // Suchfeld aufgeklappt
     seen: store.get('seen', {}),                       // Video-ID -> Zeitpunkt "gesehen"
     hideSeen: store.get('hideSeen', false),            // gesehene Videos ausblenden
     q: '',                                             // Suchbegriff
@@ -174,7 +175,9 @@
     if (changed) { store.set('listColors', state.listColors); store.set('chan', state.chan); }
   })();
   function inList(v) {
-    return state.list === 'Alle' || (chanInfo(v.channel_id).lists || []).indexOf(state.list) >= 0;
+    if (!state.sel.length) return true;
+    var mine = chanInfo(v.channel_id).lists || [];
+    return state.sel.some(function (l) { return mine.indexOf(l) >= 0; });
   }
   function saveChan() {
     Object.keys(state.chan).forEach(function (k) {   // leere Einträge aufräumen
@@ -361,19 +364,36 @@
       : fmtSpan(dayOf(r), today);
   }
   function renderListChips() {
-    if (state.list !== 'Alle' && state.lists.indexOf(state.list) < 0) state.list = 'Alle';
+    state.sel = state.sel.filter(function (l) { return state.lists.indexOf(l) >= 0; });
     $('lists').innerHTML = ['Alle'].concat(state.lists).map(function (l) {
-      return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : dot(listColor(l)) + esc(l)) + '</button>';
+      var on = l === 'Alle' ? !state.sel.length : state.sel.indexOf(l) >= 0;
+      return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + on + '">' + (l === 'Alle' ? 'Alle Kanäle' : dot(listColor(l)) + esc(l)) + '</button>';
     }).join('') + (state.lists.length
       ? '<button class="editchip" data-act="editlists" aria-label="Listen bearbeiten">' + PENCIL + '</button>'
       : '<button class="addchip" data-act="editlists">+ Liste anlegen</button>');
   }
 
+  // Position der ersten (sichtbaren) Liste des Kanals in der Listen-Reihenfolge; ohne Liste = ganz hinten
+  function listOf(cid) {
+    var mine = chanInfo(cid).lists || [];
+    var cand = state.sel.length ? state.sel : state.lists;
+    for (var i = 0; i < state.lists.length; i++) {
+      var l = state.lists[i];
+      if (mine.indexOf(l) >= 0 && cand.indexOf(l) >= 0) return l;
+    }
+    return null;
+  }
+  function listRank(cid) { var l = listOf(cid); return l === null ? 9999 : state.lists.indexOf(l); }
   function orderedNames(groups) {
     var names = Object.keys(groups);
     var byCount = function (a, b) {
       return groups[b].length - groups[a].length || a.localeCompare(b, 'de');
     };
+    if (state.sort === 'listen') {
+      return names.sort(function (a, b) {
+        return listRank(groups[a][0].channel_id) - listRank(groups[b][0].channel_id) || byCount(a, b);
+      });
+    }
     if (state.sort !== 'eigene') return names.sort(byCount);
     var ord = state.order[state.group];
     var known = names.filter(function (n) { return ord.indexOf(n) >= 0; })
@@ -393,6 +413,7 @@
     var anyOpen = Object.keys(state.expanded).some(function (k) { return state.expanded[k]; });
     $('toolbar').innerHTML =
       '<div class="sortseg" role="group" aria-label="Sortierung">' +
+      '<button data-sort="listen" aria-pressed="' + (state.sort === 'listen') + '">Listen</button>' +
       '<button data-sort="anzahl" aria-pressed="' + (state.sort === 'anzahl') + '">Anzahl</button>' +
       '<button data-sort="eigene" aria-pressed="' + (state.sort === 'eigene') + '">Eigene</button></div>' +
       '<span class="spacer"></span>' +
@@ -464,11 +485,13 @@
   }
 
   function renderFilters() {
-    $('durs').innerHTML = '<button class="seenchip" data-act="hideseen" aria-pressed="' + state.hideSeen + '">' + EYE + 'Gesehene ausblenden</button>' +
+    var open = state.searchOpen || !!state.q;
+    $('searchBox').hidden = !open;
+    $('durs').innerHTML = '<button class="searchchip" data-act="search" aria-expanded="' + open + '" aria-label="Suche ' + (open ? 'schließen' : 'öffnen') + '">' + SEARCH + '</button>' +
+      '<button class="seenchip" data-act="hideseen" aria-pressed="' + state.hideSeen + '">' + EYE + 'Gesehene ausblenden</button>' +
       DURS.map(function (d) {
         return '<button data-dur="' + d.id + '" aria-pressed="' + (state.dur === d.id) + '">' + d.label + '</button>';
       }).join('');
-    $('qClear').hidden = !state.q;
   }
   // Warnung, wenn länger kein Lauf geklappt hat (Läufe alle 2 Std. von ca. 10 bis 0 Uhr)
   function renderStale() {
@@ -515,7 +538,7 @@
       var todayStart = startOfToday().getTime();
       var past = vids.filter(function (v) { return Date.parse(v.published) < todayStart; });
       if (past.length) {
-        digest = state.list === 'Alle' && data.digests && data.digests[String(state.range)]
+        digest = !state.sel.length && data.digests && data.digests[String(state.range)]
           ? data.digests[String(state.range)] : fallbackDigest(past);
       }
     }
@@ -530,15 +553,23 @@
     groupNames = orderedNames(groups);
     renderToolbar(groupNames.length > 0);
 
+    var lastSection;
     var html = groupNames.map(function (n, gi) {
-      var list = groups[n], gsec = 0;
+      var list = groups[n], gsec = 0, head = '';
+      if (state.sort === 'listen' && !state.editing && state.lists.length) {
+        var sec = listOf(list[0].channel_id);
+        if (sec !== lastSection) {
+          lastSection = sec;
+          head = '<h3 class="lsection">' + (sec === null ? 'Ohne Liste' : dot(listColor(sec)) + esc(sec)) + '</h3>';
+        }
+      }
       list.forEach(function (v) { gsec += v.seconds || 0; });
       var open = !state.editing && (!!state.expanded[n] || !!state.q);
       var gnew = list.filter(isNew).length;
       var count = plural(list.length, 'Video', 'Videos') + (gsec ? ' · ' + totalLabel(gsec) : '') +
         (gnew ? ' · <span class="gnew">' + gnew + ' neu</span>' : '');
       var cid = list[0].channel_id, muted = isMuted(cid);
-      return '<section class="group' + (open ? ' open' : '') + (muted ? ' muted' : '') + '" data-gi="' + gi + '">' +
+      return head + '<section class="group' + (open ? ' open' : '') + (muted ? ' muted' : '') + '" data-gi="' + gi + '">' +
         '<div class="ghead">' +
         (state.editing ? '<span class="handle" data-handle="' + gi + '" aria-hidden="true">' + GRIP + '</span>' : '') +
         '<button class="gtoggle" data-expand="' + gi + '" aria-expanded="' + open + '"' + (state.editing ? ' tabindex="-1"' : '') + '>' +
@@ -550,7 +581,7 @@
     }).join('');
 
     if (!vids.length) {
-      var filtered = state.q || state.dur !== 'alle' || state.hideSeen || state.list !== 'Alle';
+      var filtered = state.q || state.dur !== 'alle' || state.hideSeen || state.sel.length;
       html = filtered
         ? '<div class="empty"><h2>Keine Treffer</h2><p>Suche, Dauer, Liste oder „Gesehene ausblenden“ anpassen.</p></div>'
         : '<div class="empty"><h2>Keine Videos in diesem Zeitraum</h2><p>Wähle einen längeren Zeitraum.</p></div>';
@@ -718,7 +749,7 @@
       var ls = state.chan[k].lists || [], j = ls.indexOf(old);
       if (j >= 0) ls[j] = name;
     });
-    if (state.list === old) state.list = name;
+    state.sel = state.sel.map(function (l) { return l === old ? name : l; });
     saveChan(); render();
   }
 
@@ -820,7 +851,15 @@
     if (ds.dur) { state.dur = ds.dur; renderList(); return; }
     if (ds.act === 'hideseen') { state.hideSeen = !state.hideSeen; store.set('hideSeen', state.hideSeen); renderList(); return; }
     if (ds.act === 'showmuted') { state.showMuted = !state.showMuted; renderList(); return; }
-    if (b.id === 'qClear') { $('q').value = ''; state.q = ''; renderList(); $('q').focus(); return; }
+    if (b.id === 'qClear') { $('q').value = ''; state.q = ''; state.searchOpen = false; renderList(); return; }
+    if (ds.act === 'search') {
+      var opening = !(state.searchOpen || state.q);
+      state.searchOpen = opening;
+      if (!opening) { $('q').value = ''; state.q = ''; }
+      renderList();
+      if (opening) $('q').focus();
+      return;
+    }
     if (ds.seen) { toggleSeen(ds.seen); return; }
     if (sheet && ds.act === 'mute') {
       var mc = editChan(sheet.cid, sheet.name);
@@ -843,7 +882,14 @@
       render(); window.scrollTo(0, 0); return;
     }
     if (ds.range) { state.range = +ds.range; render(); return; }
-    if (ds.lfilter) { state.list = ds.lfilter; render(); return; }
+    if (ds.lfilter) {
+      if (ds.lfilter === 'Alle') state.sel = [];
+      else {
+        var si = state.sel.indexOf(ds.lfilter);
+        if (si >= 0) state.sel.splice(si, 1); else state.sel.push(ds.lfilter);
+      }
+      render(); return;
+    }
     if (ds.chan) { openSheet({ type: 'chan', cid: ds.chan, name: ds.cname }); return; }
     if (ds.act === 'editlists') { openSheet({ type: 'lists' }); return; }
     if (ds.act === 'closesheet') { closeSheet(); return; }
@@ -1082,7 +1128,7 @@
       if (typeOk(d[k], BACKUP_KEYS[k])) { state[k] = d[k]; store.set(k, d[k]); }
     });
     if (!state.order.kanal) state.order.kanal = [];
-    if (state.lists.indexOf(state.list) < 0) state.list = 'Alle';
+    state.sel = state.sel.filter(function (l) { return state.lists.indexOf(l) >= 0; });
     applyTheme();
     render();
   }
