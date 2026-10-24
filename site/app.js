@@ -27,6 +27,7 @@
     locked: false,                                     // Passwort-Abfrage sichtbar
     chan: store.get('chan', {}),                       // Kanal-ID -> { name, color, lists: [] }
     lists: store.get('lists', []),                     // eigene Listen, in Anzeige-Reihenfolge
+    listColors: store.get('listColors', {}),           // Liste -> Farb-ID (null = keine Farbe)
     list: 'Alle'                                       // aktiver Listen-Filter
   };
   var sheet = null;        // offenes Menü: { type: 'chan', cid, name } | { type: 'lists' }
@@ -130,20 +131,38 @@
   ];
   function colorOf(id) { for (var i = 0; i < COLORS.length; i++) if (COLORS[i].id === id) return COLORS[i]; return null; }
   function chanInfo(cid) { return state.chan[cid] || { lists: [] }; }
+  function listColor(name) { return colorOf(state.listColors[name]); }
+  function dot(col) { return col ? '<span class="cdot" style="background:' + col.hex + '" aria-hidden="true"></span>' : ''; }
+  // Ein Punkt pro farbiger Liste, in der der Kanal steht (in Listen-Reihenfolge)
   function dotHtml(cid) {
-    var c = colorOf(chanInfo(cid).color);
-    return c ? '<span class="cdot" style="background:' + c.hex + '" title="' + c.name + '" aria-hidden="true"></span>' : '';
+    var mine = chanInfo(cid).lists || [], html = '';
+    state.lists.forEach(function (l) { if (mine.indexOf(l) >= 0) html += dot(listColor(l)); });
+    return html ? '<span class="cdots">' + html + '</span>' : '';
   }
+  function nextColor() {
+    var used = Object.keys(state.listColors).map(function (k) { return state.listColors[k]; });
+    for (var i = 0; i < COLORS.length; i++) if (used.indexOf(COLORS[i].id) < 0) return COLORS[i].id;
+    return COLORS[state.lists.length % COLORS.length].id;
+  }
+  // Einmalig: Listen ohne Farbe bekommen eine; alte Kanalfarben entfallen
+  (function () {
+    var changed = false;
+    state.lists.forEach(function (l) { if (!(l in state.listColors)) { state.listColors[l] = nextColor(); changed = true; } });
+    Object.keys(state.chan).forEach(function (k) { if ('color' in state.chan[k]) { delete state.chan[k].color; changed = true; } });
+    if (changed) { store.set('listColors', state.listColors); store.set('chan', state.chan); }
+  })();
   function inList(v) {
     return state.list === 'Alle' || (chanInfo(v.channel_id).lists || []).indexOf(state.list) >= 0;
   }
   function saveChan() {
     Object.keys(state.chan).forEach(function (k) {   // leere Einträge aufräumen
       var c = state.chan[k];
-      if (!c.color && !(c.lists && c.lists.length)) delete state.chan[k];
+      if (!(c.lists && c.lists.length)) delete state.chan[k];
     });
+    Object.keys(state.listColors).forEach(function (l) { if (state.lists.indexOf(l) < 0) delete state.listColors[l]; });
     store.set('chan', state.chan);
     store.set('lists', state.lists);
+    store.set('listColors', state.listColors);
   }
   function editChan(cid, name) {
     var c = state.chan[cid] || (state.chan[cid] = { lists: [] });
@@ -154,7 +173,7 @@
   function addList(name) {
     name = String(name || '').trim().slice(0, 30);
     if (!name || name === 'Alle') return null;
-    if (state.lists.indexOf(name) < 0) state.lists.push(name);
+    if (state.lists.indexOf(name) < 0) { state.listColors[name] = nextColor(); state.lists.push(name); }
     return name;
   }
   function listCount(name) {
@@ -265,7 +284,7 @@
 
     if (state.list !== 'Alle' && state.lists.indexOf(state.list) < 0) state.list = 'Alle';
     $('lists').innerHTML = ['Alle'].concat(state.lists).map(function (l) {
-      return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : esc(l)) + '</button>';
+      return '<button data-lfilter="' + esc(l) + '" aria-pressed="' + (state.list === l) + '">' + (l === 'Alle' ? 'Alle Kanäle' : dot(listColor(l)) + esc(l)) + '</button>';
     }).join('') + (state.lists.length
       ? '<button class="editchip" data-act="editlists" aria-label="Listen bearbeiten">' + PENCIL + '</button>'
       : '<button class="addchip" data-act="editlists">+ Liste anlegen</button>');
@@ -452,40 +471,46 @@
       '<input id="newList" maxlength="30" placeholder="Neue Liste, z. B. Favoriten" autocomplete="off">' +
       '<button type="submit" class="tbtn">Anlegen</button></form>';
   }
+  function swatchesHtml(cur) {
+    return '<div class="swatches lswatches" role="group" aria-label="Farbe wählen">' +
+      '<button class="swatch none" data-setlcolor="" aria-pressed="' + !cur + '" aria-label="Keine Farbe"></button>' +
+      COLORS.map(function (col) {
+        return '<button class="swatch" data-setlcolor="' + col.id + '" style="background:' + col.hex + '" aria-pressed="' + (cur === col.id) + '" aria-label="' + col.name + '">' +
+          (cur === col.id ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>' : '') + '</button>';
+      }).join('') + '</div>';
+  }
   function renderSheet() {
     if (!sheet) return;
     var html = '';
     if (sheet.type === 'chan') {
       var c = chanInfo(sheet.cid), lists = c.lists || [];
       html += '<h2 id="sheetTitle">' + dotHtml(sheet.cid) + esc(sheet.name) + '</h2>' +
-        '<h3>Farbe</h3><div class="swatches" role="group" aria-label="Farbe">' +
-        '<button class="swatch none" data-color="" aria-pressed="' + !c.color + '" aria-label="Keine Farbe"></button>' +
-        COLORS.map(function (col) {
-          return '<button class="swatch" data-color="' + col.id + '" style="background:' + col.hex + '" aria-pressed="' + (c.color === col.id) + '" aria-label="' + col.name + '">' +
-            (c.color === col.id ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>' : '') + '</button>';
-        }).join('') + '</div>' +
         '<h3>Listen</h3>' +
         (state.lists.length
           ? '<div class="listopts">' + state.lists.map(function (l) {
               var on = lists.indexOf(l) >= 0;
-              return '<button class="listopt" data-tlist="' + esc(l) + '" aria-pressed="' + on + '">' + (on ? BOX_ON : BOX) + '<span>' + esc(l) + '</span></button>';
+              return '<button class="listopt" data-tlist="' + esc(l) + '" aria-pressed="' + on + '">' + (on ? BOX_ON : BOX) + '<span>' + esc(l) + '</span>' + dot(listColor(l)) + '</button>';
             }).join('') + '</div>'
           : '<p class="hint2">Noch keine Listen. Leg unten eine an – der Kanal kommt gleich mit hinein.</p>') +
+        '<p class="hint2">Der Kanal bekommt die Farbe seiner Listen. Farben änderst du unter „Listen bearbeiten“ (Stift).</p>' +
         newListForm();
     } else {
       html += '<h2 id="sheetTitle">Listen bearbeiten</h2>' +
         (state.lists.length
           ? '<div class="listedit">' + state.lists.map(function (l, i) {
-              var n = state.lists.length;
+              var n = state.lists.length, col = listColor(l);
               return '<div class="lrow">' +
                 '<div class="lmoves">' +
                 '<button class="lmove" data-lmove="' + i + '" data-dir="-1" aria-label="Liste ' + esc(l) + ' nach oben"' + (i === 0 ? ' disabled' : '') + '>' + ARROW_UP + '</button>' +
                 '<button class="lmove" data-lmove="' + i + '" data-dir="1" aria-label="Liste ' + esc(l) + ' nach unten"' + (i === n - 1 ? ' disabled' : '') + '>' + ARROW_DOWN + '</button>' +
                 '</div>' +
+                '<button class="lcolor' + (col ? '' : ' none') + '" data-lcolor="' + i + '" aria-expanded="' + (sheet.colorFor === i) + '" aria-label="Farbe der Liste ' + esc(l) + ': ' + (col ? col.name : 'keine') + ' – ändern"' +
+                (col ? ' style="background:' + col.hex + '"' : '') + '></button>' +
                 '<div class="lmain"><input class="lname" data-li="' + i + '" value="' + esc(l) + '" maxlength="30" aria-label="Name der Liste ' + esc(l) + '">' +
                 '<span class="lcount">' + plural(listCount(l), 'Kanal', 'Kanäle') + '</span></div>' +
-                '<button class="ldel" data-dellist="' + i + '" aria-label="Liste ' + esc(l) + ' löschen">' + TRASH + '</button></div>';
-            }).join('') + '</div><p class="hint2">Mit den Pfeilen änderst du die Reihenfolge der Filter. Zum Umbenennen einfach den Namen ändern. Kanäle ordnest du über ⋯ beim Kanal zu.</p>'
+                '<button class="ldel" data-dellist="' + i + '" aria-label="Liste ' + esc(l) + ' löschen">' + TRASH + '</button></div>' +
+                (sheet.colorFor === i ? swatchesHtml(state.listColors[l]) : '');
+            }).join('') + '</div><p class="hint2">Pfeile = Reihenfolge der Filter, Farbkreis = Farbe der Liste. Zum Umbenennen einfach den Namen ändern. Kanäle ordnest du über ⋯ beim Kanal zu.</p>'
           : '<p class="hint2">Noch keine Listen.</p>') +
         newListForm();
     }
@@ -494,19 +519,22 @@
   }
   function deleteList(name) {
     if (!name) return;
-    var snapLists = state.lists.slice(), snapChan = JSON.parse(JSON.stringify(state.chan));
+    var snapLists = state.lists.slice(), snapChan = JSON.parse(JSON.stringify(state.chan)), snapColors = JSON.parse(JSON.stringify(state.listColors));
+    if (sheet) sheet.colorFor = null;
     state.lists = state.lists.filter(function (l) { return l !== name; });
     Object.keys(state.chan).forEach(function (k) {
       state.chan[k].lists = (state.chan[k].lists || []).filter(function (l) { return l !== name; });
     });
     saveChan(); render(); renderSheet();
-    toast('Liste „' + name + '“ gelöscht', function () { state.lists = snapLists; state.chan = snapChan; saveChan(); render(); renderSheet(); });
+    toast('Liste „' + name + '“ gelöscht', function () { state.lists = snapLists; state.chan = snapChan; state.listColors = snapColors; saveChan(); render(); renderSheet(); });
   }
   function renameList(i, name) {
     var old = state.lists[i];
     name = String(name || '').trim().slice(0, 30);
     if (!name || name === old || name === 'Alle' || state.lists.indexOf(name) >= 0) { renderSheet(); return; }
     state.lists[i] = name;
+    state.listColors[name] = state.listColors[old] === undefined ? null : state.listColors[old];
+    delete state.listColors[old];
     Object.keys(state.chan).forEach(function (k) {
       var ls = state.chan[k].lists || [], j = ls.indexOf(old);
       if (j >= 0) ls[j] = name;
@@ -606,9 +634,20 @@
     if (ds.chan) { openSheet({ type: 'chan', cid: ds.chan, name: ds.cname }); return; }
     if (ds.act === 'editlists') { openSheet({ type: 'lists' }); return; }
     if (ds.act === 'closesheet') { closeSheet(); return; }
-    if (sheet && 'color' in ds) {
-      editChan(sheet.cid, sheet.name).color = ds.color || null;
-      saveChan(); render(); renderSheet(); return;
+    if (sheet && ds.lcolor !== undefined) {
+      sheet.colorFor = sheet.colorFor === +ds.lcolor ? null : +ds.lcolor;
+      renderSheet();
+      var sw = $('sheetBody').querySelector('.lswatches [aria-pressed="true"]');
+      if (sw) sw.focus();
+      return;
+    }
+    if (sheet && ds.setlcolor !== undefined && sheet.colorFor != null) {
+      var li = sheet.colorFor;
+      state.listColors[state.lists[li]] = ds.setlcolor || null;
+      sheet.colorFor = null;
+      saveChan(); render(); renderSheet();
+      var cb = $('sheetBody').querySelector('[data-lcolor="' + li + '"]'); if (cb) cb.focus();
+      return;
     }
     if (sheet && ds.tlist) {
       var c = editChan(sheet.cid, sheet.name), i = c.lists.indexOf(ds.tlist);
@@ -617,6 +656,7 @@
     }
     if (sheet && ds.dellist !== undefined) { deleteList(state.lists[+ds.dellist]); return; }
     if (sheet && ds.lmove !== undefined) {
+      sheet.colorFor = null;
       var from = +ds.lmove, to = from + (+ds.dir);
       if (to < 0 || to >= state.lists.length) return;
       var moved = state.lists.splice(from, 1)[0];
