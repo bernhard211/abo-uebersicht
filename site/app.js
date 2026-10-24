@@ -185,6 +185,8 @@
   var DOTS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
   var BOX = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/></svg>';
   var BOX_ON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="currentColor"/><path d="M7.5 12.5l3 3 6-7" stroke="var(--card)" stroke-width="2.5"/></svg>';
+  var ARROW_UP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
+  var ARROW_DOWN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   var CHECK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
 
   function cardHtml(v, inSaved) {
@@ -474,10 +476,16 @@
       html += '<h2 id="sheetTitle">Listen bearbeiten</h2>' +
         (state.lists.length
           ? '<div class="listedit">' + state.lists.map(function (l, i) {
-              return '<div class="lrow"><input class="lname" data-li="' + i + '" value="' + esc(l) + '" maxlength="30" aria-label="Name der Liste ' + esc(l) + '">' +
-                '<span class="lcount">' + plural(listCount(l), 'Kanal', 'Kanäle') + '</span>' +
+              var n = state.lists.length;
+              return '<div class="lrow">' +
+                '<div class="lmoves">' +
+                '<button class="lmove" data-lmove="' + i + '" data-dir="-1" aria-label="Liste ' + esc(l) + ' nach oben"' + (i === 0 ? ' disabled' : '') + '>' + ARROW_UP + '</button>' +
+                '<button class="lmove" data-lmove="' + i + '" data-dir="1" aria-label="Liste ' + esc(l) + ' nach unten"' + (i === n - 1 ? ' disabled' : '') + '>' + ARROW_DOWN + '</button>' +
+                '</div>' +
+                '<div class="lmain"><input class="lname" data-li="' + i + '" value="' + esc(l) + '" maxlength="30" aria-label="Name der Liste ' + esc(l) + '">' +
+                '<span class="lcount">' + plural(listCount(l), 'Kanal', 'Kanäle') + '</span></div>' +
                 '<button class="ldel" data-dellist="' + i + '" aria-label="Liste ' + esc(l) + ' löschen">' + TRASH + '</button></div>';
-            }).join('') + '</div><p class="hint2">Zum Umbenennen einfach den Namen ändern. Kanäle ordnest du über ⋯ beim Kanal oder einen Tipp auf den Kanalnamen zu.</p>'
+            }).join('') + '</div><p class="hint2">Mit den Pfeilen änderst du die Reihenfolge der Filter. Zum Umbenennen einfach den Namen ändern. Kanäle ordnest du über ⋯ beim Kanal zu.</p>'
           : '<p class="hint2">Noch keine Listen.</p>') +
         newListForm();
     }
@@ -608,6 +616,18 @@
       saveChan(); render(); renderSheet(); return;
     }
     if (sheet && ds.dellist !== undefined) { deleteList(state.lists[+ds.dellist]); return; }
+    if (sheet && ds.lmove !== undefined) {
+      var from = +ds.lmove, to = from + (+ds.dir);
+      if (to < 0 || to >= state.lists.length) return;
+      var moved = state.lists.splice(from, 1)[0];
+      state.lists.splice(to, 0, moved);
+      saveChan(); render(); renderSheet();
+      // Fokus bleibt auf demselben Pfeil der verschobenen Liste
+      var again = $('sheetBody').querySelector('[data-lmove="' + to + '"][data-dir="' + ds.dir + '"]');
+      if (again && !again.disabled) again.focus();
+      else { var other = $('sheetBody').querySelector('[data-lmove="' + to + '"]:not([disabled])'); if (other) other.focus(); }
+      return;
+    }
     if (ds.sort) { state.sort = ds.sort; store.set('sort', state.sort); renderList(); return; }
     if (ds.act === 'edit') {
       state.editing = !state.editing;
