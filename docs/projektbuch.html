@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Abo-Übersicht Projektbuch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: eine ruhige Lesespalte mit breiteren Einschüben für Ablauf, Tabellen und Raster – oben Nutzerteil, darunter Technikteil */
+:root {
+  --bg: #F4F5F7;
+  --paper: #FFFFFF;
+  --ink: #16181D;
+  --ink-2: #4B5160;
+  --ink-3: #6B7180;
+  --line: #DFE2E8;
+  --soft: #EAECF0;
+  --accent: #C2410C;
+  --accent-ink: #9A3412;
+  --code-bg: #EEF0F3;
+  --tech-bg: #1B1E24;
+  --tech-ink: #E8EAEE;
+  --tech-ink-2: #A9AFBB;
+  --tech-line: #343944;
+  --c-rot: #DC2626; --c-blau: #1D4ED8; --c-gruen: #15803D; --c-gelb: #EAB308; --c-lila: #7C3AED; --c-tuerkis: #14B8A6;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --paper: #1A1D23; --ink: #EDEFF3; --ink-2: #B7BCC7; --ink-3: #9198A6;
+    --line: #2C3039; --soft: #242831; --accent: #F07A45; --accent-ink: #F59B6E; --code-bg: #22262E;
+    --tech-bg: #0B0D10; --tech-ink: #E8EAEE; --tech-ink-2: #A3A9B5; --tech-line: #2A2F38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --paper: #1A1D23; --ink: #EDEFF3; --ink-2: #B7BCC7; --ink-3: #9198A6;
+  --line: #2C3039; --soft: #242831; --accent: #F07A45; --accent-ink: #F59B6E; --code-bg: #22262E;
+  --tech-bg: #0B0D10; --tech-ink: #E8EAEE; --tech-ink-2: #A3A9B5; --tech-line: #2A2F38;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.prose { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: clamp(26px, 4vw, 34px); line-height: 1.15; font-weight: 800; }
+h3 { font-size: 19px; line-height: 1.25; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent-ink); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.lead { font-size: 18px; color: var(--ink-2); }
+
+/* Kopf */
+header.top { padding-block: 48px 36px; display: grid; gap: 28px; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: end; }
+header.top h1 { font-size: clamp(42px, 8vw, 76px); line-height: 0.95; font-weight: 800; }
+header.top h1 span { color: var(--accent); }
+.hero-text { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.fact { background: var(--paper); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.fact b { font-family: var(--display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 13px; color: var(--ink-3); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; padding-block: 0 8px; }
+nav.toc a { font-size: 14px; text-decoration: none; color: var(--ink-2); border: 1px solid var(--line); background: var(--paper); padding: 6px 12px; border-radius: 999px; }
+nav.toc a:hover { color: var(--ink); border-color: var(--ink-3); }
+nav.toc .sep { width: 100%; height: 0; }
+
+section.block { padding-block: 44px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 22px; }
+.head { display: flex; flex-direction: column; gap: 8px; }
+
+/* Ablauf-Band */
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+.node { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.node .where { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-ink); }
+.node h3 { font-size: 16px; }
+.node p { font-size: 14px; color: var(--ink-2); line-height: 1.5; }
+.arrow { display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
+.flow { grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr); }
+
+/* Funktionsraster */
+.features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.feat { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.feat h3 { display: flex; align-items: center; gap: 10px; }
+.feat ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.feat li { color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+.feat li b { color: var(--ink); font-weight: 600; }
+.dots { display: inline-flex; }
+.dots i { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--paper); margin-left: -3px; }
+.dots i:first-child { margin-left: 0; }
+
+/* Gesten */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); background: var(--soft); }
+tr:last-child td { border-bottom: none; }
+td.k { font-weight: 600; white-space: nowrap; }
+td.n { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-3); font-family: var(--mono); font-size: 13px; }
+td code { white-space: nowrap; }
+
+/* Technikteil – dunkles Band */
+.tech { background: var(--tech-bg); color: var(--tech-ink); margin-top: 24px; }
+.tech .wrap { padding-block: 56px 72px; }
+.tech-intro { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
+.tech-intro .eyebrow { color: var(--tech-ink-2); }
+.tech h2 { color: #FFFFFF; }
+.tech section.block { border-top-color: var(--tech-line); }
+.tech .lead, .tech p { color: var(--tech-ink-2); }
+.tech h3 { color: var(--tech-ink); }
+.tech code { background: #262B34; color: #F3D3C2; }
+.tech .table-wrap { background: #14171C; border-color: var(--tech-line); }
+.tech th { background: #1C2027; color: #9AA1AE; }
+.tech th, .tech td { border-bottom-color: var(--tech-line); }
+.tech td { color: var(--tech-ink); }
+.tech td.n { color: #9AA1AE; }
+.tech a { color: #F59B6E; }
+
+/* Ablauf eines Laufs – echte Reihenfolge, daher nummeriert */
+ol.run { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; counter-reset: s; }
+ol.run li { counter-increment: s; background: #14171C; border: 1px solid var(--tech-line); border-radius: 12px; padding: 14px 14px 14px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+ol.run li::before { content: counter(s, decimal-leading-zero); font-family: var(--mono); font-size: 12px; color: #F07A45; }
+ol.run b { color: #FFFFFF; font-family: var(--display); font-size: 16px; font-weight: 700; }
+ol.run span { color: var(--tech-ink-2); font-size: 14px; line-height: 1.5; }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid2 > * { min-width: 0; }
+.panel { border: 1px solid var(--tech-line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; background: #14171C; }
+.panel ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; color: var(--tech-ink-2); font-size: 15px; }
+.panel ul b { color: var(--tech-ink); font-weight: 600; }
+pre { margin: 0; overflow-x: auto; background: #14171C; border: 1px solid var(--tech-line); border-radius: 12px; padding: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: #D9DDE4; }
+pre .c { color: #7F8794; }
+pre .k { color: #F59B6E; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--tech-line); color: var(--tech-ink); background: #1C2027; }
+footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
+
+@media (max-width: 760px) {
+  header.top { grid-template-columns: 1fr; padding-block: 32px 24px; }
+  .flow { grid-template-columns: 1fr; }
+  .arrow { height: 26px; transform: rotate(90deg); }
+  .features, .grid2 { grid-template-columns: 1fr; }
+  ol.run { grid-template-columns: 1fr; }
+  section.block { padding-block: 34px; }
+}
+@media (min-width: 761px) and (max-width: 940px) { ol.run { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: no-preference) { nav.toc a { transition: border-color .15s, color .15s; } }
+</style>
+<style>body { margin: 0; } [hidden] { display: none !important; } img { max-width: 100%; }</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="top">
+    <div class="hero-text">
+      <span class="eyebrow">Privates App-Projekt · Stand Oktober 2026</span>
+      <h1>Abo-<br>Übersicht<span>.</span></h1>
+      <p class="lead">Alle neuen Videos aus über 800 YouTube-Abos auf einen Blick: nach Kanal gruppiert, in eigenen farbigen Listen sortiert, mit Kurz-Zusammenfassungen und Merkliste. Läuft als installierbare Web-App auf dem Android-Handy und aktualisiert sich alle zwei Stunden selbst.</p>
+    </div>
+    <div class="facts" aria-label="Eckdaten">
+      <div class="fact"><b>Heute + 7</b><span>Tage Rückblick, kalendertagsgenau</span></div>
+      <div class="fact"><b>8 × täglich</b><span>Aktualisierung, 10 bis 0 Uhr</span></div>
+      <div class="fact"><b>0 €</b><span>Hosting und Automatik (GitHub)</span></div>
+      <div class="fact"><b>AES-256</b><span>verschlüsselte Daten, Passwort nötig</span></div>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Inhalt">
+    <a href="#ueberblick">So funktioniert es</a>
+    <a href="#funktionen">Funktionen</a>
+    <a href="#bedienung">Bedienung</a>
+    <span class="sep" aria-hidden="true"></span>
+    <a href="#technik">Technik</a>
+    <a href="#lauf">Ablauf eines Laufs</a>
+    <a href="#dateien">Dateien</a>
+    <a href="#technologien">Technologien</a>
+    <a href="#schnittstellen">Schnittstellen</a>
+    <a href="#werkzeuge">Werkzeuge</a>
+    <a href="#daten">Datenhaltung</a>
+    <a href="#sicherheit">Sicherheit</a>
+    <a href="#grenzen">Grenzen &amp; Wartung</a>
+  </nav>
+
+  <section class="block" id="ueberblick">
+    <div class="head">
+      <span class="eyebrow">Aufbau</span>
+      <h2>So funktioniert es</h2>
+      <p class="prose lead">Die App selbst ist nur eine Anzeige. Die eigentliche Arbeit erledigt ein Skript, das bei GitHub automatisch läuft und eine verschlüsselte Datei veröffentlicht. Das Handy lädt diese Datei, entschlüsselt sie und merkt sich alles Persönliche lokal.</p>
+    </div>
+    <div class="flow" role="list">
+      <div class="node" role="listitem">
+        <span class="where">Einmalig am PC</span>
+        <h3>Google-Anmeldung</h3>
+        <p>Lesezugriff auf YouTube freigeben. Das Ergebnis ist ein Schlüssel, der als Secret bei GitHub liegt.</p>
+      </div>
+      <div class="arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node" role="listitem">
+        <span class="where">GitHub Actions · alle 2 Std.</span>
+        <h3>Übersicht bauen</h3>
+        <p>Abos holen, neue Videos sammeln, von Claude zusammenfassen lassen, alles verschlüsseln.</p>
+      </div>
+      <div class="arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node" role="listitem">
+        <span class="where">GitHub Pages</span>
+        <h3>Veröffentlichen</h3>
+        <p>App-Dateien plus verschlüsselte <code>data.json</code> unter einer festen Adresse.</p>
+      </div>
+      <div class="arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node" role="listitem">
+        <span class="where">Android · Chrome</span>
+        <h3>App auf dem Handy</h3>
+        <p>Einmal Passwort eingeben. Listen, Farben, Merkliste und Häkchen bleiben auf dem Gerät.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="funktionen">
+    <div class="head">
+      <span class="eyebrow">Für Nutzer</span>
+      <h2>Funktionen</h2>
+    </div>
+    <div class="features">
+      <article class="feat">
+        <h3>Übersicht &amp; Zeitraum</h3>
+        <ul>
+          <li><b>Heute</b> oder <b>1 bis 7 Tage</b> zurück, jeweils ab 0 Uhr des Tages. Unter jeder Zahl steht der Wochentag.</li>
+          <li><b>Tage abhaken</b> per Langdruck. Die grüne Markierung hängt am Kalendertag und wandert täglich eine Zahl weiter.</li>
+          <li>Kanäle starten <b>eingeklappt</b>, „Alle auf / zu“ öffnet oder schließt alle.</li>
+          <li>Kopfzeile mit Anzahl Videos, Kanälen, Gesamtdauer und <b>neuen</b> Videos.</li>
+          <li><b>Warnhinweis</b>, wenn die Übersicht zu alt ist, mit Tipps zur Ursache.</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <h3>Kurz gesagt</h3>
+        <ul>
+          <li>Claude schreibt <b>einmal täglich</b> einen Überblick pro Zeitraum (1–7 Tage), nur aus <b>abgeschlossenen Tagen</b> bis gestern.</li>
+          <li>Bei „Heute“ ausgeblendet. Ein- und ausklappbar, der Zustand wird gemerkt.</li>
+          <li>Bei aktivem Listen-Filter eine einfache Auswertung des gefilterten Ausschnitts.</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <h3>Kanäle &amp; Listen <span class="dots" aria-hidden="true"><i style="background:var(--c-rot)"></i><i style="background:var(--c-blau)"></i><i style="background:var(--c-gruen)"></i></span></h3>
+        <ul>
+          <li><b>Eigene Listen</b> in beliebiger Zahl, jede mit einer von <b>11 Farben</b> oder ohne Farbe.</li>
+          <li>Kanäle über <b>⋯</b> einer oder mehreren Listen zuordnen. Ein Kanal zeigt die Punkte all seiner Listen.</li>
+          <li><b>Mehrfachauswahl</b> im Filter: gezeigt werden Kanäle aus mindestens einer gewählten Liste.</li>
+          <li>Listen umbenennen, löschen (mit Rückgängig), Farbe ändern und per ↑↓ <b>umsortieren</b>.</li>
+          <li>Kanal-Sortierung <b>Listen</b> (mit Zwischenüberschriften, „Ohne Liste“ unten), <b>Anzahl</b> oder <b>Eigene</b> per Ziehen.</li>
+          <li>Kanäle <b>stummschalten</b>, bei Bedarf wieder einblenden.</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <h3>Videos</h3>
+        <ul>
+          <li>Vorschaubild, Dauer und Alter. Die <b>Zusammenfassung</b> lässt sich aufklappen.</li>
+          <li><b>In YouTube öffnen</b> startet die YouTube-App und markiert das Video als gesehen.</li>
+          <li><b>NEU</b>-Schild für alles, was seit dem letzten Besuch dazugekommen ist.</li>
+          <li>Gesehene Videos werden blass dargestellt, auf Wunsch <b>ausgeblendet</b>.</li>
+          <li><b>Suche</b> über einen runden Knopf, nach Titel oder Kanal, auch mit mehreren Wörtern.</li>
+          <li><b>Dauer-Filter</b>: unter 15 Min., 15–30 Min., über 30 Min.</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <h3>Merkliste</h3>
+        <ul>
+          <li>Video nach rechts wischen oder Lesezeichen antippen. Gemerktes bleibt auch nach 7 Tagen erhalten.</li>
+          <li><b>Listen-Filter</b> wie in der Übersicht.</li>
+          <li>Sortierung: <b>Zuletzt gemerkt</b>, <b>Kürzeste</b>, <b>Längste</b>, <b>Nach Kanal</b> oder <b>Eigene</b>.</li>
+          <li>Eigene Reihenfolge per Ziehen am Griff oder mit Pfeilen.</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <h3>App, Sicherheit &amp; Sicherung</h3>
+        <ul>
+          <li><b>Installierbar</b> auf dem Homescreen, öffnet ohne Browserleiste und zeigt offline den letzten Stand.</li>
+          <li><b>Dark Mode</b>: automatisch wie das Handy, fest dunkel oder fest hell.</li>
+          <li><b>Passwort</b> einmal eingeben, danach entsperrt. „App sperren“ setzt das zurück.</li>
+          <li><b>Sichern / Wiederherstellen</b> als Datei: Listen, Farben, Zuordnungen, Merkliste, Häkchen, Einstellungen.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="block" id="bedienung">
+    <div class="head">
+      <span class="eyebrow">Spickzettel</span>
+      <h2>Bedienung auf einen Blick</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Geste oder Knopf</th><th>Wirkung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Zahl antippen</td><td>Zeitraum wählen, von Heute bis 7 Tage</td></tr>
+          <tr><td class="k">Zahl lange drücken</td><td>Tag abhaken oder Markierung entfernen</td></tr>
+          <tr><td class="k">Kanal antippen</td><td>Videos des Kanals auf- oder zuklappen</td></tr>
+          <tr><td class="k">⋯ beim Kanal</td><td>Listen zuordnen, Kanal stummschalten</td></tr>
+          <tr><td class="k">Video nach rechts wischen</td><td>Auf die Merkliste setzen oder davon entfernen</td></tr>
+          <tr><td class="k">Video nach links wischen</td><td>Als gesehen oder ungesehen markieren</td></tr>
+          <tr><td class="k">Stift in der Listen-Zeile</td><td>Listen umbenennen, einfärben, sortieren, löschen</td></tr>
+          <tr><td class="k">Mehrere Listen antippen</td><td>Filter kombinieren, „Alle Kanäle“ setzt zurück</td></tr>
+          <tr><td class="k">Rückgängig im Hinweis</td><td>Letzte Aktion zurücknehmen, z.&nbsp;B. Löschen oder Wiederherstellen</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="tech" id="technik">
+  <div class="wrap">
+    <div class="tech-intro">
+      <span class="eyebrow">Technischer Teil</span>
+      <h2>Unter der Haube</h2>
+      <p class="prose lead">Kein eigener Server, keine Datenbank, kein Build-Schritt: ein Python-Skript in GitHub Actions, statische Dateien auf GitHub Pages und eine Web-App in reinem JavaScript. Persönliche Einstellungen leben im Browser des Handys.</p>
+    </div>
+
+    <section class="block" id="lauf">
+      <div class="head">
+        <h3>Ablauf eines Laufs</h3>
+        <p class="prose">Der Workflow wird stündlich angestoßen (<code>17 8-23 * * *</code> UTC). Durch kommen nur die geraden Stunden von 10 bis 0 Uhr deutscher Zeit, damit es ohne Eingriff zur Sommer- und Winterzeit passt.</p>
+      </div>
+      <ol class="run">
+        <li><b>Uhrzeit prüfen</b><span>Job <code>gate</code> rechnet in Europe/Berlin und berücksichtigt Verspätungen bis knapp eine Stunde.</span></li>
+        <li><b>Abos laden</b><span>Refresh-Token gegen Zugriffstoken tauschen, dann <code>subscriptions.list</code> seitenweise, 50 pro Seite.</span></li>
+        <li><b>Neue Videos sammeln</b><span>RSS-Feed je Kanal, 8 parallel, 3 Versuche. Behalten wird ab 0 Uhr vor 7 Tagen, Shorts fliegen raus.</span></li>
+        <li><b>Dauer ergänzen</b><span><code>videos.list</code> mit <code>contentDetails</code>, 50 IDs pro Anfrage. Alles bis 60 Sekunden wird als Short verworfen.</span></li>
+        <li><b>Zusammenfassen</b><span>Nur Videos ohne Zusammenfassung im Cache. 15 pro Anfrage, 4 parallel, misslungene Blöcke werden halbiert und wiederholt.</span></li>
+        <li><b>Kurz gesagt</b><span>Einmal pro Kalendertag aus den abgeschlossenen Tagen, danach aus <code>data/digests.json</code> wiederverwendet.</span></li>
+        <li><b>Verschlüsseln</b><span>PBKDF2-SHA256 mit 600.000 Runden aus <code>APP_PASSWORD</code>, AES-256-GCM, für jeden Lauf ein neuer IV.</span></li>
+        <li><b>Veröffentlichen</b><span><code>upload-pages-artifact</code> und <code>deploy-pages</code> stellen den Ordner <code>site/</code> bereit.</span></li>
+        <li><b>Repo aktiv halten</b><span>Job <code>keepalive</code>: ist der letzte Commit 50 Tage alt oder älter, folgt ein leerer Commit, gegen die 60-Tage-Abschaltung.</span></li>
+      </ol>
+    </section>
+
+    <section class="block" id="dateien">
+      <div class="head"><h3>Dateien im Projekt</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Datei</th><th>Zeilen</th><th>Zweck</th></tr></thead>
+          <tbody>
+            <tr><td><code>build.py</code></td><td class="n">505</td><td>Kernskript: Abos, Feeds, Dauer, Claude-Zusammenfassungen, „Kurz gesagt“, Verschlüsselung, <code>data.json</code>. Offline-Testmodus mit <code>--offline</code> und <code>--now</code>.</td></tr>
+            <tr><td><code>auth_setup.py</code></td><td class="n">123</td><td>Einmaliger Google-Login am PC, OAuth mit PKCE über eine lokale Rückleitung. Gibt die drei Werte für die GitHub-Secrets aus.</td></tr>
+            <tr><td><code>config.toml</code></td><td class="n">21</td><td>Einstellungen: <code>max_days</code>, <code>timezone</code>, <code>include_shorts</code>, Modell, Batch-Größe, <code>effort</code>.</td></tr>
+            <tr><td><code>requirements.txt</code></td><td class="n">2</td><td><code>anthropic</code>, <code>cryptography</code>. Alles andere ist Standardbibliothek.</td></tr>
+            <tr><td><code>.github/workflows/update.yml</code></td><td class="n">118</td><td>Automatik mit den Jobs <code>gate</code>, <code>build</code>, <code>deploy</code> und <code>keepalive</code>.</td></tr>
+            <tr><td><code>site/index.html</code></td><td class="n">108</td><td>Gerüst der App: Kopf, Zeitraum, Listen-Zeile, Suche, Filter, Passwort-Abfrage, Menü-Fenster.</td></tr>
+            <tr><td><code>site/app.js</code></td><td class="n">1204</td><td>Gesamte App-Logik: Entschlüsseln, Filtern, Gruppieren, Gesten, Listen, Merkliste, Sicherung.</td></tr>
+            <tr><td><code>site/styles.css</code></td><td class="n">373</td><td>Gestaltung mit CSS-Variablen für Hell und Dunkel.</td></tr>
+            <tr><td><code>site/sw.js</code></td><td class="n">27</td><td>Service Worker: lädt zuerst aus dem Netz, fällt offline auf die letzte Version zurück.</td></tr>
+            <tr><td><code>site/manifest.webmanifest</code></td><td class="n">17</td><td>App-Name, Icons, Vollbild-Modus für „App installieren“.</td></tr>
+            <tr><td><code>site/datenschutz.html</code></td><td class="n">41</td><td>Datenschutzhinweis, auch für die Google-Branding-Seite nötig.</td></tr>
+            <tr><td><code>site/icons/*.png</code></td><td class="n">3</td><td>App-Icons in 192, 512 und 512 maskable.</td></tr>
+            <tr><td><code>tests/</code></td><td class="n">4</td><td>Erfundene Testkanäle und Feeds für den Offline-Testlauf.</td></tr>
+            <tr><td><code>README.md</code></td><td class="n">89</td><td>Einrichtungsanleitung Schritt für Schritt.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block" id="technologien">
+      <div class="head"><h3>Technologien</h3></div>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Hintergrund</h3>
+          <ul>
+            <li><b>Python 3.12</b> mit Standardbibliothek: <code>urllib</code>, <code>xml.etree</code>, <code>tomllib</code>, <code>zoneinfo</code>, <code>concurrent.futures</code>, <code>hashlib</code></li>
+            <li><b>anthropic</b> SDK für die Claude-API</li>
+            <li><b>cryptography</b> für AES-256-GCM</li>
+            <li><b>GitHub Actions</b> (Ubuntu-Runner) mit Actions-Cache für Zwischenstände</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>App</h3>
+          <ul>
+            <li><b>Reines JavaScript</b> ohne Framework und ohne Build-Schritt, eine Datei</li>
+            <li><b>PWA</b>: Web-App-Manifest und Service Worker</li>
+            <li><b>Web Crypto API</b>: PBKDF2 und AES-GCM im Browser</li>
+            <li><b>Pointer Events</b> für Wischen, Langdruck und Ziehen</li>
+            <li><b>localStorage</b> für alle persönlichen Einstellungen</li>
+            <li><b>CSS-Variablen</b> mit <code>prefers-color-scheme</code> für den Dark Mode</li>
+            <li>Schrift <b>Inter</b> über Google Fonts</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="schnittstellen">
+      <div class="head"><h3>Schnittstellen</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Schnittstelle</th><th>Wofür</th><th>Zugang</th><th>Kosten / Kontingent</th></tr></thead>
+          <tbody>
+            <tr><td>YouTube Data API v3<br><code>subscriptions.list</code></td><td>Eigene Abos lesen (<code>mine=true</code>, 50 pro Seite)</td><td>OAuth, Scope <code>youtube.readonly</code></td><td>1 Einheit pro Seite, ca. 17 pro Lauf</td></tr>
+            <tr><td>YouTube Data API v3<br><code>videos.list</code></td><td>Videodauer (<code>contentDetails</code>)</td><td>OAuth-Token (oder API-Schlüssel)</td><td>1 Einheit pro 50 Videos, Tageskontingent 10.000</td></tr>
+            <tr><td>YouTube-RSS<br><code>/feeds/videos.xml?channel_id=</code></td><td>Neueste Videos je Kanal: Titel, Beschreibung, Bild, Datum</td><td>öffentlich, ohne Anmeldung</td><td>kostenlos, letzte 15 Videos je Kanal</td></tr>
+            <tr><td>Google OAuth 2.0<br><code>oauth2.googleapis.com/token</code></td><td>Einmal Code gegen Refresh-Token tauschen, danach je Lauf Zugriffstoken holen</td><td>Desktop-Client, PKCE, Rückleitung auf <code>127.0.0.1</code></td><td>kostenlos. App „In Produktion“, damit der Token nicht nach 7 Tagen abläuft</td></tr>
+            <tr><td>Claude Messages API<br><code>claude-haiku-5-5</code></td><td>Zusammenfassungen und „Kurz gesagt“</td><td>API-Schlüssel</td><td>nach Tokens. Thinking aus, <code>effort: low</code>, Structured Outputs</td></tr>
+            <tr><td>GitHub Pages</td><td>Hosting der App und der verschlüsselten Daten</td><td><code>deploy-pages</code> mit OIDC</td><td>kostenlos bei öffentlichem Repo</td></tr>
+            <tr><td>i.ytimg.com · Google Fonts</td><td>Vorschaubilder · Schrift</td><td>öffentlich</td><td>kostenlos</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block" id="werkzeuge">
+      <div class="head"><h3>Werkzeuge &amp; Dienste</h3></div>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Für Betrieb und Einrichtung</h3>
+          <ul>
+            <li><b>Git / GitHub</b>: Repository, Versionsverlauf, Weboberfläche zum Hochladen und Bearbeiten</li>
+            <li><b>GitHub Actions</b>: Zeitplan, Läufe, Protokolle, Cache</li>
+            <li><b>GitHub Secrets</b>: alle Zugangsdaten und das App-Passwort</li>
+            <li><b>GitHub Pages</b>: Auslieferung der App</li>
+            <li><b>Google Cloud Console</b>: Projekt, YouTube Data API, Google Auth Platform (Branding, Zielgruppe, Clients)</li>
+            <li><b>Anthropic Console</b>: API-Schlüssel, Guthaben, Ausgabenlimit</li>
+            <li><b>Python + PowerShell</b> am PC für <code>auth_setup.py</code></li>
+            <li><b>Chrome für Android</b>: „App installieren“</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Für Entwicklung und Tests</h3>
+          <ul>
+            <li><b>Offline-Testlauf</b> mit Beispiel-Feeds: <code>build.py --offline tests/feeds --now …</code></li>
+            <li><b>Nachgestellte Claude- und Google-Antworten</b>, um Fehlerfälle zu prüfen (abgeschnitten, verweigert, mehrseitig)</li>
+            <li><b>Playwright mit Chromium</b>: App im Handyformat 390 × 844 durchklicken, Wischen, Langdruck und Ziehen simulieren, Screenshots hell und dunkel</li>
+            <li><b>Node</b> zur Syntaxprüfung von <code>app.js</code> und <code>sw.js</code></li>
+            <li><b>Pillow</b> zum Erzeugen der App-Icons</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="daten">
+      <div class="head">
+        <h3>Datenhaltung: was liegt wo</h3>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ort</th><th>Inhalt</th><th>Sichtbar für</th></tr></thead>
+          <tbody>
+            <tr><td class="k">GitHub-Repo</td><td>Code, Einstellungen, Testdaten. Keine persönlichen Daten.</td><td>öffentlich</td></tr>
+            <tr><td class="k">GitHub Secrets</td><td><code>YT_CLIENT_ID</code>, <code>YT_CLIENT_SECRET</code>, <code>YT_REFRESH_TOKEN</code>, <code>ANTHROPIC_API_KEY</code>, <code>APP_PASSWORD</code>, optional <code>YT_API_KEY</code>, <code>SUBSCRIPTIONS_CSV</code></td><td>nur die eigenen Läufe</td></tr>
+            <tr><td class="k">Actions-Cache</td><td><code>data/cache.json</code> (Zusammenfassungen im Zeitfenster), <code>data/digests.json</code> („Kurz gesagt“ des Tages)</td><td>nur die eigenen Läufe</td></tr>
+            <tr><td class="k">GitHub Pages</td><td>App-Dateien und <code>data.json</code>, AES-verschlüsselt</td><td>öffentlich, aber ohne Passwort unlesbar</td></tr>
+            <tr><td class="k">Handy (localStorage)</td><td><code>saved</code>, <code>seen</code>, <code>done</code>, <code>lists</code>, <code>listColors</code>, <code>chan</code>, <code>order</code>, <code>sort</code>, <code>savedSort</code>, <code>savedOrder</code>, <code>hideSeen</code>, <code>theme</code>, <code>digestOpen</code>, <code>knownIds</code>, <code>key</code>; jeweils mit Präfix <code>abo.</code></td><td>nur dieses Gerät, sicherbar als Datei (ohne <code>key</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid2">
+        <div>
+<pre><span class="c"># data.json – öffentlich, verschlüsselte Hülle</span>
+{ <span class="k">"v"</span>: 1, <span class="k">"enc"</span>: "AES-256-GCM",
+  <span class="k">"kdf"</span>: "PBKDF2-SHA256", <span class="k">"iter"</span>: 600000,
+  <span class="k">"salt"</span>: "…", <span class="k">"iv"</span>: "…", <span class="k">"data"</span>: "…" }</pre>
+        </div>
+        <div>
+<pre><span class="c"># entschlüsselter Inhalt</span>
+{ <span class="k">"generated"</span>, <span class="k">"timezone"</span>, <span class="k">"max_days"</span>,
+  <span class="k">"subscriptions"</span>, <span class="k">"digests"</span>: {"1".."7"},
+  <span class="k">"videos"</span>: [{ id, title, channel, channel_id,
+    published, url, thumb, summary, seconds }] }</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="sicherheit">
+      <div class="head"><h3>Sicherheit &amp; Datenschutz</h3></div>
+      <div class="grid2">
+        <div class="panel">
+          <ul>
+            <li><b>Nur Lesezugriff</b> auf YouTube, jederzeit widerrufbar im Google-Konto</li>
+            <li><b>Verschlüsselung</b> vor der Veröffentlichung. Das Salz ist pro Repo fest, die App speichert den abgeleiteten Schlüssel statt des Passworts.</li>
+            <li>Passwort-Normalisierung (NFC), damit Umlaute auf jedem Gerät gleich ankommen</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <ul>
+            <li>An Claude gehen nur <b>Kanalname, Titel und Beschreibung</b> neuer Videos, keine Abo-Liste, kein Verlauf</li>
+            <li>Protokolle zeigen nur Zahlen, Secrets werden geschwärzt</li>
+            <li>Kein Tracking, keine Cookies, keine Analyse</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="grenzen">
+      <div class="head"><h3>Grenzen &amp; Wartung</h3></div>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Bekannte Grenzen</h3>
+          <ul>
+            <li>Zusammenfassungen entstehen aus Titel und Beschreibung, nicht aus dem Gesprochenen</li>
+            <li>RSS liefert 15 Videos je Kanal. Für 7 Tage reicht das fast immer.</li>
+            <li>„Gesehen“ ist eine eigene Markierung, der YouTube-Verlauf ist per API nicht abrufbar</li>
+            <li>Persönliche Einstellungen gelten pro Gerät, über Sichern/Wiederherstellen übertragbar</li>
+            <li>GitHub startet geplante Läufe teils mit Verspätung</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Wartung</h3>
+          <ul>
+            <li>60-Tage-Regel und Zeitumstellung erledigt der Workflow selbst</li>
+            <li>Bei „Google-Login fehlgeschlagen“: <code>auth_setup.py</code> erneut ausführen, Secret ersetzen</li>
+            <li>Ausgabenlimit in der Anthropic Console setzen</li>
+            <li>Ab und zu „Sichern“ und die Datei in Google Drive ablegen</li>
+          </ul>
+          <div class="chips" aria-label="Stichworte">
+            <span class="chip">cron 17 8-23 * * *</span><span class="chip">Europe/Berlin</span><span class="chip">AES-GCM</span><span class="chip">PKCE</span><span class="chip">PWA</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="wrap">
+  <footer>Abo-Übersicht · privates Projekt · gebaut im Oktober 2026 mit Claude</footer>
+</div>
+
+</body>
+</html>
