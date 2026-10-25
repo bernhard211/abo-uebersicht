@@ -7,8 +7,8 @@ Private Web-App (PWA) für Android: Übersicht der neuen Videos aus ~850 YouTube
 - **Sprache:** Mit mir Deutsch sprechen. Alle Texte in der App, im Protokoll und in Kommentaren auf Deutsch.
 - **Keine Secrets in Dateien.** Zugangsdaten liegen ausschließlich als GitHub-Secrets: `YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`, `ANTHROPIC_API_KEY`, `APP_PASSWORD` (optional `YT_API_KEY`, `SUBSCRIPTIONS_CSV`). Nie Tokens, Passwörter oder echte Abo-Daten ins Repo schreiben.
 - **Das Repo ist öffentlich.** Keine Kanalnamen, Themen oder sonstigen persönlichen Daten in Code, Tests oder Logs. Das Protokoll von `build.py` gibt nur Zahlen aus.
-- Vor dem Arbeiten `git pull`: Der Workflow legt gelegentlich automatische „Repo aktiv halten“-Commits an.
-- Commit-Nachrichten kurz auf Deutsch. Nach dem Push wirken App-Änderungen sofort (App neu öffnen). Für neue Daten den Workflow starten: `gh workflow run update.yml` oder in GitHub unter Actions › Run workflow.
+- Vor dem Arbeiten `git pull`.
+- Commit-Nachrichten kurz auf Deutsch. Pages wird nur vom Workflow veröffentlicht: Nach dem Push von App-Änderungen den Workflow einmal starten, erst dann ist die neue Version online (App neu öffnen). Workflow starten: in der App ↻ › „Neue Videos abrufen“, `gh workflow run update.yml` oder in GitHub unter Actions › Run workflow.
 - Bei Änderungen an Verhalten oder Funktionen auch `docs/projektbuch.html`, `docs/nachbau-prompt.md` und `README.md` nachziehen.
 
 ## Aufbau
@@ -17,7 +17,7 @@ Private Web-App (PWA) für Android: Übersicht der neuen Videos aus ~850 YouTube
 build.py                      Kernskript (Python 3.12): Abos → Feeds → Nachladen aktiver Kanäle → Dauer → Claude → „Kurz gesagt“ → Verschlüsselung → site/data.json
 auth_setup.py                 einmaliger Google-Login am PC (OAuth Desktop-Client, PKCE, Loopback)
 config.toml                   max_days, timezone, include_shorts, [llm] model/batch_size/effort
-.github/workflows/update.yml  Jobs: gate (Uhrzeit) → build → deploy (GitHub Pages); keepalive
+.github/workflows/update.yml  nur workflow_dispatch; Jobs: build → deploy (GitHub Pages)
 site/                         die App: index.html, app.js (gesamte Logik), styles.css, sw.js, manifest, icons, datenschutz.html
 tests/                        erfundene Testkanäle und Feeds für den Offline-Lauf
 docs/                         Projektbuch und Nachbau-Prompt (werden NICHT mit der App veröffentlicht)
@@ -33,9 +33,9 @@ Datenhaltung: Actions-Cache `data/cache.json` (Zusammenfassungen) und `data/dige
 - **„Kurz gesagt“** nur aus abgeschlossenen Tagen (bis gestern), einmal pro Kalendertag erzeugt.
 - **RSS liefert nur 15 Videos je Kanal.** Liegen alle im Zeitraum, lädt `fetch_uploads()` die Upload-Playlist (`UU…`) über `playlistItems.list` nach.
 - **Verschlüsselung:** PBKDF2-SHA256 mit 600.000 Runden, Salz = SHA-256(`"abo-uebersicht|" + GITHUB_REPOSITORY`)[:16], AES-256-GCM, Passwort NFC-normalisiert. Die App speichert den abgeleiteten Schlüssel (`abo.key`), nicht das Passwort. Salz- oder Formatänderungen sperren alle Geräte aus.
-- **Zeitplan:** cron `17 8-23 * * *` UTC, der Job `gate` lässt stündlich 10–0 Uhr deutscher Zeit durch. Nicht auf jede zweite Stunde reduzieren: GitHub lässt geplante Läufe bei Last aus.
-- **keepalive:** leerer Commit, wenn der letzte älter als 50 Tage ist (60-Tage-Regel für geplante Läufe).
-- **App:** reines JavaScript (ES5-Stil, eine IIFE), kein Framework, kein Build-Schritt. UI nur über `render()`/`renderList()` aus `state` neu zeichnen. Jeder localStorage-Zugriff über `store.get/set` (try/catch). Neue persistente Einstellungen auch in `BACKUP_KEYS` aufnehmen (Sichern/Wiederherstellen).
+- **Kein Zeitplan:** Der Workflow läuft nur manuell (App, `gh workflow run`, Actions › Run workflow). GitHub hat geplante Läufe zu oft ausgelassen (beobachtet: 4 von 12) oder um bis zu 2 Std. verspätet, deshalb wurde die Automatik samt `gate` und `keepalive` am 25.10.2026 auf Wunsch entfernt. Nicht ohne Rückfrage wieder einbauen.
+- **Abruf aus der App:** ↻ öffnet das Menü „Aktualisieren“. „Neue Videos abrufen“ startet `update.yml` per `workflow_dispatch` über `api.github.com` (CORS erlaubt) und fragt `…/runs` ab, bis der Lauf fertig ist. Fine-grained Token (nur dieses Repo, *Actions: Read and write*) liegt als `abo.ghToken` nur auf dem Gerät. Das Repo wird aus der Pages-Adresse abgeleitet, also kein Repo-Name im Code.
+- **App:** reines JavaScript (ES5-Stil, eine IIFE), kein Framework, kein Build-Schritt. UI nur über `render()`/`renderList()` aus `state` neu zeichnen. Jeder localStorage-Zugriff über `store.get/set` (try/catch). Neue persistente Einstellungen auch in `BACKUP_KEYS` aufnehmen (Sichern/Wiederherstellen), Zugangsdaten (`key`, `ghToken`) ausdrücklich nicht.
 - **Service Worker** network-first. Bei größeren Änderungen am Cache-Inhalt `CACHE` in `sw.js` hochzählen.
 - Touch-Ziele ≥ 44 px, Hell **und** Dunkel über CSS-Variablen, echte `<button>`/`<a>` mit `aria-*`.
 
@@ -51,6 +51,7 @@ cd site && python -m http.server 8000                                # App im Br
 
 - Claude- und Google-Aufrufe für Tests **nachstellen** (z. B. `anthropic` per `PYTHONPATH` durch einen Stub ersetzen, `build.http_get/http_post` monkeypatchen). Keine echten API-Aufrufe in Tests.
 - App-Änderungen mit Playwright/Chromium im Handyformat durchklicken (Wischen, Langdruck, Ziehen, Filter, Merkliste, Dark Mode), keine Konsolenfehler, kein horizontales Scrollen.
+- Für „Neue Videos abrufen“ die Seite per `context.route` unter einer `https://<name>.github.io/abo-uebersicht/`-Adresse ausliefern (sonst ist die Funktion aus) und `api.github.com` samt CORS-Kopfzeilen nachstellen.
 - Danach die Testreste löschen: `subscriptions.csv`, `data/`, `site/data.json`.
 
 ## Bekannte Stolpersteine

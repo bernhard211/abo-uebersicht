@@ -163,11 +163,11 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
     <div class="hero-text">
       <span class="eyebrow">Privates App-Projekt · Stand Oktober 2026</span>
       <h1>Abo-<br>Übersicht<span>.</span></h1>
-      <p class="lead">Alle neuen Videos aus über 800 YouTube-Abos auf einen Blick: nach Kanal gruppiert, in eigenen farbigen Listen sortiert, mit Kurz-Zusammenfassungen und Merkliste. Läuft als installierbare Web-App auf dem Android-Handy und aktualisiert sich stündlich selbst.</p>
+      <p class="lead">Alle neuen Videos aus über 800 YouTube-Abos auf einen Blick: nach Kanal gruppiert, in eigenen farbigen Listen sortiert, mit Kurz-Zusammenfassungen und Merkliste. Läuft als installierbare Web-App auf dem Android-Handy und holt neue Videos auf Knopfdruck.</p>
     </div>
     <div class="facts" aria-label="Eckdaten">
       <div class="fact"><b>Heute + 7</b><span>Tage Rückblick, kalendertagsgenau</span></div>
-      <div class="fact"><b>stündlich</b><span>Aktualisierung, 10 bis 0 Uhr</span></div>
+      <div class="fact"><b>Knopfdruck</b><span>Aktualisierung aus der App</span></div>
       <div class="fact"><b>0 €</b><span>Hosting und Automatik (GitHub)</span></div>
       <div class="fact"><b>AES-256</b><span>verschlüsselte Daten, Passwort nötig</span></div>
     </div>
@@ -203,7 +203,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
       </div>
       <div class="arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
       <div class="node" role="listitem">
-        <span class="where">GitHub Actions · stündlich</span>
+        <span class="where">GitHub Actions · auf Knopfdruck</span>
         <h3>Übersicht bauen</h3>
         <p>Abos holen, neue Videos sammeln, von Claude zusammenfassen lassen, alles verschlüsseln.</p>
       </div>
@@ -283,6 +283,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
           <li><b>Installierbar</b> auf dem Homescreen, öffnet ohne Browserleiste und zeigt offline den letzten Stand.</li>
           <li><b>Dark Mode</b>: automatisch wie das Handy, fest dunkel oder fest hell.</li>
           <li><b>Passwort</b> einmal eingeben, danach entsperrt. „App sperren“ setzt das zurück.</li>
+          <li><b>Neue Videos abrufen</b> direkt aus der App (↻): startet den Lauf bei GitHub und lädt nach 1–3 Minuten von selbst neu. Braucht einmalig einen GitHub-Token, der nur auf dem Handy liegt.</li>
           <li><b>Sichern / Wiederherstellen</b> als Datei: Listen, Farben, Zuordnungen, Merkliste, Häkchen, Einstellungen.</li>
         </ul>
       </article>
@@ -324,10 +325,10 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
     <section class="block" id="lauf">
       <div class="head">
         <h3>Ablauf eines Laufs</h3>
-        <p class="prose">Der Workflow wird stündlich angestoßen (<code>17 8-23 * * *</code> UTC). Gebaut wird zwischen 10 und 0 Uhr deutscher Zeit, damit es ohne Eingriff zur Sommer- und Winterzeit passt. Lässt GitHub einen Anstoß aus, was bei hoher Last vorkommt, folgt der nächste eine Stunde später.</p>
+        <p class="prose">Der Workflow läuft nur auf Knopfdruck (<code>workflow_dispatch</code>): aus der App über „Neue Videos abrufen“ oder in GitHub unter Actions › Run workflow. Einen Zeitplan gibt es bewusst nicht, weil GitHub geplante Läufe oft ausgelassen oder stark verspätet hat.</p>
       </div>
       <ol class="run">
-        <li><b>Uhrzeit prüfen</b><span>Job <code>gate</code> rechnet in Europe/Berlin und berücksichtigt Verspätungen bis knapp eine Stunde.</span></li>
+        <li><b>Starten</b><span>Die App schickt <code>workflow_dispatch</code> an die GitHub-API und fragt danach alle 8 Sekunden den Stand des Laufs ab.</span></li>
         <li><b>Abos laden</b><span>Refresh-Token gegen Zugriffstoken tauschen, dann <code>subscriptions.list</code> seitenweise, 50 pro Seite.</span></li>
         <li><b>Neue Videos sammeln</b><span>RSS-Feed je Kanal, 8 parallel, 3 Versuche. Behalten wird ab 0 Uhr vor 7 Tagen, Shorts fliegen raus.</span></li>
         <li><b>Aktive Kanäle nachladen</b><span>Liegen alle 15 Feed-Einträge im Zeitraum, holt <code>playlistItems.list</code> die Upload-Playlist seitenweise bis zum Beginn des Zeitraums.</span></li>
@@ -336,7 +337,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
         <li><b>Kurz gesagt</b><span>Einmal pro Kalendertag aus den abgeschlossenen Tagen, danach aus <code>data/digests.json</code> wiederverwendet.</span></li>
         <li><b>Verschlüsseln</b><span>PBKDF2-SHA256 mit 600.000 Runden aus <code>APP_PASSWORD</code>, AES-256-GCM, für jeden Lauf ein neuer IV.</span></li>
         <li><b>Veröffentlichen</b><span><code>upload-pages-artifact</code> und <code>deploy-pages</code> stellen den Ordner <code>site/</code> bereit.</span></li>
-        <li><b>Repo aktiv halten</b><span>Job <code>keepalive</code>: ist der letzte Commit 50 Tage alt oder älter, folgt ein leerer Commit, gegen die 60-Tage-Abschaltung.</span></li>
+        <li><b>Neu laden</b><span>Ist der Lauf fertig, lädt die App <code>data.json</code> neu, notfalls mehrmals, bis Pages den neuen Stand liefert.</span></li>
       </ol>
     </section>
 
@@ -350,16 +351,16 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <tr><td><code>auth_setup.py</code></td><td class="n">123</td><td>Einmaliger Google-Login am PC, OAuth mit PKCE über eine lokale Rückleitung. Gibt die drei Werte für die GitHub-Secrets aus.</td></tr>
             <tr><td><code>config.toml</code></td><td class="n">21</td><td>Einstellungen: <code>max_days</code>, <code>timezone</code>, <code>include_shorts</code>, Modell, Batch-Größe, <code>effort</code>.</td></tr>
             <tr><td><code>requirements.txt</code></td><td class="n">2</td><td><code>anthropic</code>, <code>cryptography</code>. Alles andere ist Standardbibliothek.</td></tr>
-            <tr><td><code>.github/workflows/update.yml</code></td><td class="n">118</td><td>Automatik mit den Jobs <code>gate</code>, <code>build</code>, <code>deploy</code> und <code>keepalive</code>.</td></tr>
+            <tr><td><code>.github/workflows/update.yml</code></td><td class="n">66</td><td>Lauf auf Knopfdruck (<code>workflow_dispatch</code>) mit den Jobs <code>build</code> und <code>deploy</code>.</td></tr>
             <tr><td><code>site/index.html</code></td><td class="n">108</td><td>Gerüst der App: Kopf, Zeitraum, Listen-Zeile, Suche, Filter, Passwort-Abfrage, Menü-Fenster.</td></tr>
-            <tr><td><code>site/app.js</code></td><td class="n">1204</td><td>Gesamte App-Logik: Entschlüsseln, Filtern, Gruppieren, Gesten, Listen, Merkliste, Sicherung.</td></tr>
-            <tr><td><code>site/styles.css</code></td><td class="n">373</td><td>Gestaltung mit CSS-Variablen für Hell und Dunkel.</td></tr>
+            <tr><td><code>site/app.js</code></td><td class="n">1359</td><td>Gesamte App-Logik: Entschlüsseln, Filtern, Gruppieren, Gesten, Listen, Merkliste, Sicherung, Abruf über GitHub.</td></tr>
+            <tr><td><code>site/styles.css</code></td><td class="n">384</td><td>Gestaltung mit CSS-Variablen für Hell und Dunkel.</td></tr>
             <tr><td><code>site/sw.js</code></td><td class="n">27</td><td>Service Worker: lädt zuerst aus dem Netz, fällt offline auf die letzte Version zurück.</td></tr>
             <tr><td><code>site/manifest.webmanifest</code></td><td class="n">17</td><td>App-Name, Icons, Vollbild-Modus für „App installieren“.</td></tr>
             <tr><td><code>site/datenschutz.html</code></td><td class="n">41</td><td>Datenschutzhinweis, auch für die Google-Branding-Seite nötig.</td></tr>
             <tr><td><code>site/icons/*.png</code></td><td class="n">3</td><td>App-Icons in 192, 512 und 512 maskable.</td></tr>
             <tr><td><code>tests/</code></td><td class="n">4</td><td>Erfundene Testkanäle und Feeds für den Offline-Testlauf.</td></tr>
-            <tr><td><code>README.md</code></td><td class="n">89</td><td>Einrichtungsanleitung Schritt für Schritt.</td></tr>
+            <tr><td><code>README.md</code></td><td class="n">100</td><td>Einrichtungsanleitung Schritt für Schritt.</td></tr>
           </tbody>
         </table>
       </div>
@@ -404,6 +405,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <tr><td>YouTube-RSS<br><code>/feeds/videos.xml?channel_id=</code></td><td>Neueste Videos je Kanal: Titel, Beschreibung, Bild, Datum</td><td>öffentlich, ohne Anmeldung</td><td>kostenlos, letzte 15 Videos je Kanal</td></tr>
             <tr><td>Google OAuth 2.0<br><code>oauth2.googleapis.com/token</code></td><td>Einmal Code gegen Refresh-Token tauschen, danach je Lauf Zugriffstoken holen</td><td>Desktop-Client, PKCE, Rückleitung auf <code>127.0.0.1</code></td><td>kostenlos. App „In Produktion“, damit der Token nicht nach 7 Tagen abläuft</td></tr>
             <tr><td>Claude Messages API<br><code>claude-haiku-5-5</code></td><td>Zusammenfassungen und „Kurz gesagt“</td><td>API-Schlüssel</td><td>nach Tokens. Thinking aus, <code>effort: low</code>, Structured Outputs</td></tr>
+            <tr><td>GitHub REST API<br><code>actions/workflows/update.yml/dispatches</code></td><td>Lauf aus der App starten, danach <code>…/runs</code> abfragen, bis er fertig ist</td><td>Fine-grained Token (nur dieses Repo, Actions: Read and write), nur auf dem Handy</td><td>kostenlos</td></tr>
             <tr><td>GitHub Pages</td><td>Hosting der App und der verschlüsselten Daten</td><td><code>deploy-pages</code> mit OIDC</td><td>kostenlos bei öffentlichem Repo</td></tr>
             <tr><td>i.ytimg.com · Google Fonts</td><td>Vorschaubilder · Schrift</td><td>öffentlich</td><td>kostenlos</td></tr>
           </tbody>
@@ -418,7 +420,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
           <h3>Für Betrieb und Einrichtung</h3>
           <ul>
             <li><b>Git / GitHub</b>: Repository, Versionsverlauf, Weboberfläche zum Hochladen und Bearbeiten</li>
-            <li><b>GitHub Actions</b>: Zeitplan, Läufe, Protokolle, Cache</li>
+            <li><b>GitHub Actions</b>: Läufe auf Knopfdruck, Protokolle, Cache</li>
             <li><b>GitHub Secrets</b>: alle Zugangsdaten und das App-Passwort</li>
             <li><b>GitHub Pages</b>: Auslieferung der App</li>
             <li><b>Google Cloud Console</b>: Projekt, YouTube Data API, Google Auth Platform (Branding, Zielgruppe, Clients)</li>
@@ -452,7 +454,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <tr><td class="k">GitHub Secrets</td><td><code>YT_CLIENT_ID</code>, <code>YT_CLIENT_SECRET</code>, <code>YT_REFRESH_TOKEN</code>, <code>ANTHROPIC_API_KEY</code>, <code>APP_PASSWORD</code>, optional <code>YT_API_KEY</code>, <code>SUBSCRIPTIONS_CSV</code></td><td>nur die eigenen Läufe</td></tr>
             <tr><td class="k">Actions-Cache</td><td><code>data/cache.json</code> (Zusammenfassungen im Zeitfenster), <code>data/digests.json</code> („Kurz gesagt“ des Tages)</td><td>nur die eigenen Läufe</td></tr>
             <tr><td class="k">GitHub Pages</td><td>App-Dateien und <code>data.json</code>, AES-verschlüsselt</td><td>öffentlich, aber ohne Passwort unlesbar</td></tr>
-            <tr><td class="k">Handy (localStorage)</td><td><code>saved</code>, <code>seen</code>, <code>done</code>, <code>lists</code>, <code>listColors</code>, <code>chan</code>, <code>listOrder</code>, <code>sort</code>, <code>savedSort</code>, <code>savedOrder</code>, <code>hideSeen</code>, <code>theme</code>, <code>digestOpen</code>, <code>knownIds</code>, <code>key</code>; jeweils mit Präfix <code>abo.</code></td><td>nur dieses Gerät, sicherbar als Datei (ohne <code>key</code>)</td></tr>
+            <tr><td class="k">Handy (localStorage)</td><td><code>saved</code>, <code>seen</code>, <code>done</code>, <code>lists</code>, <code>listColors</code>, <code>chan</code>, <code>listOrder</code>, <code>sort</code>, <code>savedSort</code>, <code>savedOrder</code>, <code>hideSeen</code>, <code>theme</code>, <code>digestOpen</code>, <code>knownIds</code>, <code>key</code>, <code>ghToken</code>; jeweils mit Präfix <code>abo.</code></td><td>nur dieses Gerät, sicherbar als Datei (ohne <code>key</code> und <code>ghToken</code>)</td></tr>
           </tbody>
         </table>
       </div>
@@ -481,6 +483,7 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <li><b>Nur Lesezugriff</b> auf YouTube, jederzeit widerrufbar im Google-Konto</li>
             <li><b>Verschlüsselung</b> vor der Veröffentlichung. Das Salz ist pro Repo fest, die App speichert den abgeleiteten Schlüssel statt des Passworts.</li>
             <li>Passwort-Normalisierung (NFC), damit Umlaute auf jedem Gerät gleich ankommen</li>
+            <li><b>GitHub-Token</b> für den Abruf aus der App: nur dieses Repo, nur Actions, liegt nur auf dem Handy und nicht in der Sicherung</li>
           </ul>
         </div>
         <div class="panel">
@@ -503,19 +506,19 @@ footer { padding-block: 28px 40px; color: var(--ink-3); font-size: 14px; }
             <li>RSS liefert nur 15 Videos je Kanal. Bei sehr aktiven Kanälen lädt das Skript den Rest automatisch über die API nach.</li>
             <li>„Gesehen“ ist eine eigene Markierung, der YouTube-Verlauf ist per API nicht abrufbar</li>
             <li>Persönliche Einstellungen gelten pro Gerät, über Sichern/Wiederherstellen übertragbar</li>
-            <li>GitHub startet geplante Läufe teils mit Verspätung oder lässt einzelne aus</li>
+            <li>Neue Videos kommen nur, wenn du sie abrufst; ein Lauf dauert meist 1–3 Minuten</li>
           </ul>
         </div>
         <div class="panel">
           <h3>Wartung</h3>
           <ul>
-            <li>60-Tage-Regel und Zeitumstellung erledigt der Workflow selbst</li>
+            <li>Läuft der GitHub-Token ab, in der App unter ↻ einen neuen einfügen</li>
             <li>Bei „Google-Login fehlgeschlagen“: <code>auth_setup.py</code> erneut ausführen, Secret ersetzen</li>
             <li>Ausgabenlimit in der Anthropic Console setzen</li>
             <li>Ab und zu „Sichern“ und die Datei in Google Drive ablegen</li>
           </ul>
           <div class="chips" aria-label="Stichworte">
-            <span class="chip">cron 17 8-23 * * *</span><span class="chip">Europe/Berlin</span><span class="chip">AES-GCM</span><span class="chip">PKCE</span><span class="chip">PWA</span>
+            <span class="chip">workflow_dispatch</span><span class="chip">Europe/Berlin</span><span class="chip">AES-GCM</span><span class="chip">PKCE</span><span class="chip">PWA</span>
           </div>
         </div>
       </div>

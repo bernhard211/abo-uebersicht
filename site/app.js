@@ -500,15 +500,14 @@
         return '<button data-dur="' + d.id + '" aria-pressed="' + (state.dur === d.id) + '">' + d.label + '</button>';
       }).join('');
   }
-  // Warnung, wenn länger kein Lauf geklappt hat (Läufe stündlich von ca. 10 bis 0 Uhr)
+  // Hinweis, wenn der letzte Abruf länger her ist (es gibt keine automatischen Läufe)
   function renderStale() {
-    var age = (Date.now() - Date.parse(data.generated)) / 3600000, h = new Date().getHours();
-    var stale = age > 12 || (h >= 12 && age > 4.5);
+    var age = (Date.now() - Date.parse(data.generated)) / 3600000;
+    var stale = age > 3;
     $('stale').hidden = !stale;
     if (stale) {
       $('stale').innerHTML = '<strong>Die Übersicht ist ' + (age >= 48 ? Math.floor(age / 24) + ' Tage' : Math.floor(age) + ' Std.') + ' alt.</strong> ' +
-        'Normalerweise wird sie stündlich aktualisiert. GitHub lässt geplante Läufe manchmal aus – hält das an, schau unter Actions nach. ' +
-        'Steht dort „Google-Login fehlgeschlagen“, führe <code>auth_setup.py</code> erneut aus.';
+        'Neue Videos kommen, wenn du sie abrufst. <button class="linkbtn" data-act="refreshsheet">Jetzt neue Videos abrufen</button>';
     }
   }
 
@@ -596,9 +595,10 @@
     $('groups').innerHTML = html;
     $('groups').classList.toggle('editing', state.editing);
 
-    var g = new Date(data.generated);
-    $('foot').textContent = 'Stand: ' + g.toLocaleString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) +
-      ' · ' + plural(data.subscriptions, 'Abo', 'Abos');
+    $('foot').textContent = 'Stand: ' + standLabel(data.generated) + ' · ' + plural(data.subscriptions, 'Abo', 'Abos');
+  }
+  function standLabel(iso) {
+    return new Date(iso).toLocaleString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
   function render() { renderHeader(); renderList(); }
@@ -671,7 +671,7 @@
     $('sheet').hidden = false;
     document.body.style.overflow = 'hidden';
     renderSheet();
-    var first = $('sheetBody').querySelector('button, input');
+    var first = $('sheetBody').querySelector(s.type === 'refresh' ? 'button[data-act]:not([disabled])' : 'button, input');
     if (first) first.focus();
   }
   function closeSheet() {
@@ -696,7 +696,9 @@
   function renderSheet() {
     if (!sheet) return;
     var html = '';
-    if (sheet.type === 'chan') {
+    if (sheet.type === 'refresh') {
+      html += refreshSheetHtml();
+    } else if (sheet.type === 'chan') {
       var c = chanInfo(sheet.cid), lists = c.lists || [];
       html += '<h2 id="sheetTitle">' + dotHtml(sheet.cid) + esc(sheet.name) + '</h2>' +
         '<h3>Listen</h3>' +
@@ -822,7 +824,140 @@
       .catch(function () {
         if (!data) { $('stats').textContent = 'Übersicht konnte nicht geladen werden.'; renderHeader(); }
       })
-      .then(function () { btn.classList.remove('spin'); });
+      .then(function () { btn.classList.toggle('spin', remoteBusy()); });
+  }
+
+  // ---------------------------------------------------------------- Neue Videos abrufen (Workflow bei GitHub starten)
+  // Repo aus der Pages-Adresse ableiten: https://<besitzer>.github.io/<repo>/
+  var GH_REPO = (function () {
+    var m = location.hostname.match(/^([^.]+)\.github\.io$/i), seg = location.pathname.split('/')[1];
+    return m && seg ? m[1] + '/' + seg : null;
+  })();
+  var GH_WORKFLOW = '/actions/workflows/update.yml';
+  // Der Token bleibt nur auf diesem Gerät – bewusst nicht in BACKUP_KEYS, Zugangsdaten gehören nicht in die Sicherung
+  var remote = { token: store.get('ghToken', null) || '', phase: '', msg: '', url: '', since: 0 };
+  function remoteBusy() { return ['start', 'wait', 'run', 'load'].indexOf(remote.phase) >= 0; }
+  function ghApi(path, opts) {
+    opts = opts || {};
+    var headers = { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + (opts.token || remote.token), 'X-GitHub-Api-Version': '2022-11-28' };
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    return fetch('https://api.github.com/repos/' + GH_REPO + path, {
+      method: opts.body ? 'POST' : 'GET', headers: headers, cache: 'no-store', body: opts.body ? JSON.stringify(opts.body) : undefined
+    }).then(function (r) {
+      if (!r.ok) { var e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+      return r.status === 204 ? null : r.json();
+    });
+  }
+  function ghError(e) {
+    if (!e.status) return 'Keine Verbindung zu GitHub. Bitte später noch einmal versuchen.';
+    if (e.status === 401) return 'Der GitHub-Token ist ungültig oder abgelaufen. Bitte einen neuen einfügen.';
+    if (e.status === 403 || e.status === 404) return 'Der Token darf den Abruf nicht starten. Er braucht für dieses Repo die Berechtigung „Actions: Read and write“.';
+    return 'GitHub hat den Abruf abgelehnt (Fehler ' + e.status + ').';
+  }
+  function setRemote(phase, msg) {
+    var changed = phase !== remote.phase || (msg || '') !== remote.msg;
+    remote.phase = phase; remote.msg = msg || '';
+    $('refresh').classList.toggle('spin', remoteBusy());
+    if (changed && sheet && sheet.type === 'refresh') renderSheet();
+  }
+  function remoteText() {
+    return {
+      start: 'Wird gestartet …',
+      wait: 'Gestartet, wartet bei GitHub auf einen freien Platz …',
+      run: 'Läuft … meist 1–3 Minuten. Die App lädt danach von selbst neu, du kannst sie solange weiter benutzen.',
+      load: 'Fertig, lade die neuen Daten …',
+      done: 'Neue Videos sind geladen.',
+      error: remote.msg
+    }[remote.phase] || 'Startet den Abruf bei GitHub. Meist dauert es 1–3 Minuten, danach lädt die App von selbst neu.';
+  }
+  function startRemote() {
+    if (remoteBusy() || !remote.token) return;
+    var last = 0, before = data && data.generated, runs = GH_WORKFLOW + '/runs?event=workflow_dispatch&per_page=1';
+    remote.url = '';
+    setRemote('start');
+    ghApi(runs)
+      .then(function (d) { last = d.workflow_runs.length ? d.workflow_runs[0].run_number : 0; })
+      .then(function () { return ghApi(GH_WORKFLOW + '/dispatches', { body: { ref: 'main' } }); })
+      .then(function () { remote.since = Date.now(); setRemote('wait'); pollRemote(runs, last, before); })
+      .catch(function (e) {
+        if (sheet && sheet.type === 'refresh' && [401, 403, 404].indexOf(e.status) >= 0) sheet.form = true;
+        setRemote('error', ghError(e));
+      });
+  }
+  function pollRemote(runs, last, before) {
+    setTimeout(function () {
+      if (Date.now() - remote.since > 15 * 60000) { setRemote('error', 'Der Abruf dauert ungewöhnlich lange.'); return; }
+      ghApi(runs).then(function (d) {
+        var r = d.workflow_runs[0];
+        if (!r || r.run_number <= last) {   // Lauf noch nicht angelegt
+          if (Date.now() - remote.since > 120000) { setRemote('error', 'GitHub hat den Abruf nicht gestartet. Bitte später noch einmal versuchen.'); return; }
+          pollRemote(runs, last, before); return;
+        }
+        remote.url = r.html_url;
+        if (r.status !== 'completed') { setRemote(r.status === 'in_progress' ? 'run' : 'wait'); pollRemote(runs, last, before); return; }
+        if (r.conclusion !== 'success') {
+          setRemote('error', r.conclusion === 'cancelled' ? 'Der Abruf wurde abgebrochen.'
+            : 'Der Abruf ist fehlgeschlagen. Steht bei GitHub „Google-Login fehlgeschlagen“, führe am PC auth_setup.py erneut aus.');
+          return;
+        }
+        setRemote('load');
+        reloadNewer(before, 3);
+      }).catch(function (e) {
+        if (!e.status) { pollRemote(runs, last, before); return; }   // kurzes Funkloch: weiter nachsehen
+        setRemote('error', ghError(e));
+      });
+    }, 8000);
+  }
+  // GitHub Pages braucht nach dem Lauf manchmal noch ein paar Sekunden
+  function reloadNewer(before, tries) {
+    load().then(function () {
+      if (data && data.generated !== before) { setRemote('done'); toast('Neue Videos geladen'); return; }
+      if (tries > 0) { setTimeout(function () { reloadNewer(before, tries - 1); }, 10000); return; }
+      setRemote('error', 'Der Abruf ist fertig, die neuen Daten sind aber noch nicht da. Tippe gleich auf „Nur neu laden“.');
+    });
+  }
+  function saveToken(t) {
+    var s = sheet;
+    t = String(t || '').trim();
+    if (!/^(github_pat_|ghp_)\w+$/.test(t)) { s.tokenMsg = 'Das ist kein GitHub-Token. Er beginnt mit „github_pat_“.'; renderSheet(); return; }
+    s.tokenMsg = 'Prüfe den Token …'; renderSheet();
+    ghApi(GH_WORKFLOW, { token: t })
+      .then(function () {
+        remote.token = t; store.set('ghToken', t);
+        s.form = false; s.tokenMsg = '';
+        if (remote.phase === 'error') setRemote('');
+        renderSheet();
+        toast('GitHub-Token gespeichert');
+      })
+      .catch(function (e) { s.tokenMsg = ghError(e); renderSheet(); });
+  }
+  function tokenFormHtml() {
+    return (remote.token ? '<h3>GitHub-Token ändern</h3>' : '<h3>Einmalig einrichten</h3>') +
+      '<ol class="steps">' +
+      '<li>Bei GitHub einen <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained Token erstellen</a>.</li>' +
+      '<li>Repository access: <b>Only select repositories</b> › <b>' + esc(GH_REPO.split('/')[1]) + '</b></li>' +
+      '<li>Permissions: <b>Actions</b> › <b>Read and write</b></li>' +
+      '<li>Token kopieren und hier einfügen. Er bleibt nur auf diesem Gerät.</li></ol>' +
+      '<form class="newlist" id="tokenForm"><label class="sr" for="ghToken">GitHub-Token</label>' +
+      '<input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+      '<button type="submit" class="tbtn">Speichern</button></form>' +
+      (sheet.tokenMsg ? '<p class="hint2 err" role="alert">' + esc(sheet.tokenMsg) + '</p>' : '') +
+      (remote.token ? '<button class="linkbtn" data-act="ghforget">GitHub-Token von diesem Gerät entfernen</button>' : '');
+  }
+  function refreshSheetHtml() {
+    var busy = remoteBusy(), html = '<h2 id="sheetTitle">Aktualisieren</h2>';
+    if (data) html += '<p class="hint2">Stand: ' + standLabel(data.generated) + ' (' + ageLabel(Date.now() - Date.parse(data.generated)) + ')</p>';
+    if (!GH_REPO) {
+      html += '<p class="hint2">Neue Videos abrufen geht nur in der veröffentlichten App auf GitHub Pages.</p>';
+    } else if (remote.token) {
+      html += '<button class="tbtn primary big" data-act="dispatch"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Abruf läuft …' : 'Neue Videos abrufen') + '</button>' +
+        '<p class="hint2' + (remote.phase === 'error' ? ' err' : '') + '" role="status">' + esc(remoteText()) +
+        (remote.phase === 'error' && remote.url ? ' <a href="' + esc(remote.url) + '" target="_blank" rel="noopener">Details bei GitHub</a>' : '') + '</p>';
+    }
+    if (GH_REPO && (!remote.token || sheet.form)) html += tokenFormHtml();
+    html += '<button class="tbtn big" data-act="reload">Nur neu laden</button>';
+    if (GH_REPO && remote.token && !sheet.form) html += '<button class="linkbtn" data-act="tokenform">GitHub-Token ändern</button>';
+    return html;
   }
 
   // ---------------------------------------------------------------- Klicks
@@ -843,7 +978,15 @@
     if (!b) return;
     var ds = b.dataset;
     if (b.id === 'toastUndo') { var f = undoFn; $('toast').hidden = true; undoFn = null; if (f) f(); return; }
-    if (b.id === 'refresh') { load(); return; }
+    if (b.id === 'refresh' || ds.act === 'refreshsheet') { openSheet({ type: 'refresh' }); return; }
+    if (ds.act === 'reload') { closeSheet(); load(); return; }
+    if (ds.act === 'dispatch') { startRemote(); return; }
+    if (sheet && ds.act === 'tokenform') { sheet.form = true; renderSheet(); $('ghToken').focus(); return; }
+    if (sheet && ds.act === 'ghforget') {
+      remote.token = ''; store.set('ghToken', null); sheet.form = false; sheet.tokenMsg = '';
+      if (!remoteBusy()) setRemote('');
+      renderSheet(); toast('GitHub-Token entfernt'); return;
+    }
     if (ds.act === 'export') { exportBackup(); return; }
     if (ds.ssort) { state.savedSort = ds.ssort; store.set('savedSort', state.savedSort); state.savedEditing = false; renderList(); return; }
     if (ds.act === 'sedit') { state.savedEditing = !state.savedEditing; renderList(); return; }
@@ -1103,6 +1246,7 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
   $('sheet').addEventListener('submit', function (e) {
+    if (e.target.id === 'tokenForm') { e.preventDefault(); saveToken($('ghToken').value); return; }
     if (e.target.id !== 'newListForm') return;
     e.preventDefault();
     var name = addList($('newList').value);

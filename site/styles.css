@@ -19,6 +19,7 @@
   --accent: #C2410C;
   --save: #15803D;
   --remove: #B91C1C;
+  --err: #B91C1C;
   --shadow: 0 1px 2px rgba(0,0,0,.12);
   color-scheme: light;
 }
@@ -31,6 +32,7 @@
     --digest-bg: #26231F; --digest-ink: #DAD5CC; --digest-head: #F2F0EB;
     --sel-bg: #F2F0EB; --sel-ink: #141312;
     --done-bg: #14532D; --done-line: #22C55E; --done-ink: #DCFCE7;
+    --err: #F87171;
     --shadow: 0 1px 2px rgba(0,0,0,.5);
     color-scheme: dark;
   }
@@ -41,6 +43,7 @@
   --digest-bg: #26231F; --digest-ink: #DAD5CC; --digest-head: #F2F0EB;
   --sel-bg: #F2F0EB; --sel-ink: #141312;
   --done-bg: #14532D; --done-line: #22C55E; --done-ink: #DCFCE7;
+  --err: #F87171;
   --shadow: 0 1px 2px rgba(0,0,0,.5);
   color-scheme: dark;
 }
@@ -299,6 +302,14 @@ h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; }
 .ldel { flex: none; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card); color: var(--remove); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .hint2 { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2); }
 .sheetpanel .done { justify-content: center; min-height: 48px; font-size: 15px; margin-top: 8px; }
+/* Aktualisieren: neue Videos bei GitHub abrufen */
+.sheetpanel .big { justify-content: center; min-height: 48px; font-size: 15px; }
+.sheetpanel .big:disabled { opacity: .6; cursor: default; }
+.steps { margin: 0; padding-left: 22px; font-size: 13px; line-height: 1.6; color: var(--ink2); }
+.steps b { white-space: nowrap; }
+.steps a, .hint2 a { color: var(--ink); font-weight: 600; }
+.hint2.err { color: var(--err); font-weight: 600; }
+#sheetBody > .linkbtn { align-self: center; min-height: 44px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .listchips .addchip { color: var(--ink2); border-style: dashed; }
 .lcolor { flex: none; width: 36px; height: 36px; border-radius: 18px; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line2); cursor: pointer; padding: 0; position: relative; overflow: hidden; }

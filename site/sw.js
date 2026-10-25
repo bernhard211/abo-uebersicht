@@ -1,6 +1,6 @@
 // Immer zuerst aus dem Netz laden (so kommen App-Updates sofort an),
 // bei Funkloch die zuletzt geladene Version aus dem Zwischenspeicher.
-var CACHE = 'abo-v2';
+var CACHE = 'abo-v3';
 var SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', function (e) {

@@ -1,12 +1,9 @@
 name: Übersicht aktualisieren
 
 on:
-  schedule:
-    # Stündlich zwischen 8 und 23 Uhr UTC anstoßen – der Job "gate" lässt alles zwischen 10 und 0 Uhr
-    # deutscher Zeit durch. So passt es in Sommer- UND Winterzeit. GitHub lässt geplante Läufe bei hoher
-    # Last manchmal aus; durch den Stundentakt kommt der nächste spätestens eine Stunde später.
-    - cron: "17 8-23 * * *"
-  workflow_dispatch:        # manuell starten: Actions › Übersicht aktualisieren › Run workflow
+  # Nur manuell: in der App über ↻ › „Neue Videos abrufen“ oder unter Actions › Übersicht aktualisieren › Run workflow.
+  # Keinen Zeitplan: GitHub hat geplante Läufe zu oft ausgelassen oder stark verspätet.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,32 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      run: ${{ steps.check.outputs.run }}
-    steps:
-      - name: Uhrzeit prüfen (deutsche Zeit, stündlich von 10 bis 0 Uhr)
-        id: check
-        run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "Manuell gestartet – läuft immer."
-            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          H=$((10#$(TZ=Europe/Berlin date +%H))); M=$((10#$(TZ=Europe/Berlin date +%M)))
-          # Geplant ist jeweils hh:17 – bei Verspätung zählt die Stunde, für die der Lauf gedacht war
-          if [ "$M" -lt 17 ]; then H=$(( (H + 23) % 24 )); fi
-          if [ "$H" -ge 10 ] || [ "$H" -eq 0 ]; then
-            echo "Geplante Stunde $H Uhr – Übersicht wird aktualisiert."
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Geplante Stunde $H Uhr – nicht vorgesehen, übersprungen."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
   build:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,28 +64,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
-  # GitHub schaltet geplante Läufe in öffentlichen Repos nach 60 Tagen ohne Aktivität ab.
-  # Ist der letzte Commit älter als 50 Tage, wird ein leerer Commit angelegt.
-  keepalive:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Repo aktiv halten
-        run: |
-          LAST=$(git log -1 --format=%ct)
-          AGE=$(( ( $(date +%s) - LAST ) / 86400 ))
-          echo "Letzter Commit vor $AGE Tagen."
-          if [ "$AGE" -ge 50 ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit --allow-empty -m "Automatisch: Repo aktiv halten (geplante Läufe nicht abschalten)"
-            git push
-            echo "Leerer Commit angelegt."
-          else
-            echo "Nichts zu tun."
-          fi

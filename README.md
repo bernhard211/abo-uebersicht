@@ -1,9 +1,9 @@
 # Abo-Übersicht
 
-Die App zeigt neue Videos deiner YouTube-Abos von heute bis 7 Tage zurück, nach Kanal gruppiert. Kanäle kannst du farbig markieren und eigenen Listen zuordnen. Jedes Video hat eine Kurz-Zusammenfassung, und oben steht ein Überblick über die abgeschlossenen Tage. Sie läuft als Web-App (PWA) auf dem Handy, ist per Passwort verschlüsselt (Secret `APP_PASSWORD`) und wird stündlich von 10 bis 0 Uhr automatisch aktualisiert.
+Die App zeigt neue Videos deiner YouTube-Abos von heute bis 7 Tage zurück, nach Kanal gruppiert. Kanäle kannst du farbig markieren und eigenen Listen zuordnen. Jedes Video hat eine Kurz-Zusammenfassung, und oben steht ein Überblick über die abgeschlossenen Tage. Sie läuft als Web-App (PWA) auf dem Handy, ist per Passwort verschlüsselt (Secret `APP_PASSWORD`) und wird aktualisiert, wenn du in der App auf **Neue Videos abrufen** tippst.
 
 ```
-Google-Login (einmalig) ──► build.py (GitHub Actions, täglich)
+Google-Login (einmalig) ──► build.py (GitHub Actions, auf Knopfdruck)
                               ├─ deine Abos über die YouTube-API
                               ├─ neue Videos über den RSS-Feed je Kanal
                               ├─ Videodauer über die YouTube-API
@@ -58,6 +58,16 @@ Danach ist die App unter `https://<dein-name>.github.io/abo-uebersicht/` erreich
 ### 6. Aufs Handy holen
 Öffne die Adresse in Chrome und tippe auf **⋮ › App installieren** (oder **Zum Startbildschirm hinzufügen**). Tippst du auf **In YouTube öffnen**, startet die YouTube-App.
 
+### 7. Neue Videos direkt in der App abrufen
+Es gibt keine automatischen Läufe. Über den Aktualisieren-Knopf (↻) oben rechts startest du einen Lauf vom Handy aus, ohne GitHub zu öffnen. Dafür braucht die App einmalig einen GitHub-Token:
+1. Im Browser unter [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new) einen **Fine-grained Token** anlegen.
+2. **Repository access:** *Only select repositories* › `abo-uebersicht`.
+3. **Permissions:** *Actions* › *Read and write*. Mehr braucht er nicht.
+4. Ablaufdatum wählen, Token erzeugen und kopieren.
+5. In der App auf ↻ tippen, Token einfügen, **Speichern**.
+
+Danach startet **Neue Videos abrufen** einen Lauf. Nach meist 1–3 Minuten lädt die App von selbst neu. Der Token liegt nur auf dem Handy und nicht in der Sicherungsdatei. Er kann nur die Workflows dieses Repos starten und verwalten, aber keinen Code ändern.
+
 ## Anpassen
 In `config.toml` kannst du ändern:
 - **effort** (Aufwand) für Claude.
@@ -65,10 +75,11 @@ In `config.toml` kannst du ändern:
 - ob **Shorts** angezeigt werden.
 - das **Claude-Modell**.
 
-Den Zeitpunkt der Aktualisierung legt die `cron`-Zeile in `.github/workflows/update.yml` fest.
+Der Workflow `.github/workflows/update.yml` läuft nur, wenn du ihn startest: in der App (↻), in GitHub unter **Actions › Übersicht aktualisieren › Run workflow** oder per `gh workflow run update.yml`. Einen Zeitplan gibt es bewusst nicht, weil GitHub geplante Läufe oft auslässt oder stark verspätet.
 
 ## Wenn etwas nicht klappt
 - **Lauf schlägt mit „Google-Login fehlgeschlagen“ fehl:** Führe `python auth_setup.py` erneut aus und ersetze das Secret `YT_REFRESH_TOKEN`. Das passiert z. B., wenn du den Zugriff unter myaccount.google.com › Sicherheit entfernt hast oder die App doch im Testmodus war.
+- **App meldet beim Abrufen „Token ungültig oder abgelaufen“ oder „darf den Abruf nicht starten“:** Lege wie in Schritt 7 einen neuen Token an und füge ihn in der App unter ↻ › *GitHub-Token ändern* ein.
 - **Ersatzlösung ohne Login:** Exportiere die Abo-Liste über [takeout.google.com](https://takeout.google.com) (nur *YouTube › Abos*) und lege den Inhalt der CSV als Secret `SUBSCRIPTIONS_CSV` an. Sie wird automatisch genutzt, wenn der Login nicht funktioniert. Neue Abos tauchen dann aber erst nach einem neuen Export auf.
 
 ## Lokal ausprobieren
@@ -86,4 +97,4 @@ Ohne Netz und ohne Schlüssel funktioniert ein Testlauf mit Beispiel-Feeds: `tes
 - **Zusammenfassungen** entstehen aus Titel und Videobeschreibung, nicht aus dem Gesprochenen.
 - **RSS-Feeds** enthalten pro Kanal nur die letzten 15 Videos. Bei sehr aktiven Kanälen lädt das Skript die übrigen automatisch über die YouTube-API nach (1 Kontingent-Einheit pro 50 Videos).
 - **Shorts** werden ausgeblendet, das heißt alle Videos bis 60 Sekunden sowie alles, was der Feed als Short kennzeichnet.
-- **YouTube-Kontingent:** Ein täglicher Lauf verbraucht nur wenige Einheiten des kostenlosen Tageskontingents von 10.000.
+- **YouTube-Kontingent:** Ein Lauf verbraucht nur wenige Einheiten des kostenlosen Tageskontingents von 10.000.

@@ -80,11 +80,9 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
 
 ## 5. Workflow `.github/workflows/update.yml`
 
-- Trigger `schedule: "17 8-23 * * *"` plus `workflow_dispatch`.
-- **Job `gate`:** prüft die Uhrzeit in Europe/Berlin und lässt **stündlich 10–0 Uhr** durch, damit es ohne Eingriff im Sommer und Winter passt. **Nicht** nur jede zweite Stunde bauen: GitHub lässt geplante Läufe bei hoher Last manchmal ganz aus, sonst entstehen mehrstündige Lücken. Bei Verspätung zählt die geplante Stunde (Minute < 17 → Stunde − 1). Manuelle Starts laufen immer. [ANPASSEN: gewünschte Zeiten]
+- **Nur** `workflow_dispatch`, **kein Zeitplan**: gestartet wird aus der App („Neue Videos abrufen“) oder unter Actions › Run workflow. GitHub lässt geplante Läufe oft aus oder verspätet sie um Stunden, deshalb verzichten wir darauf (und damit auch auf eine Uhrzeit-Prüfung und einen Keepalive-Job gegen die 60-Tage-Abschaltung).
 - **Job `build`:** Python 3.12, `pip install -r requirements.txt`, Takeout-Fallback aus dem Secret, `actions/cache` für den Ordner `data/` (Key `summaries-${{ github.run_id }}`, `restore-keys: summaries-`), `python build.py` mit allen Secrets als Umgebungsvariablen, dann `configure-pages` und `upload-pages-artifact` (Ordner `site`).
 - **Job `deploy`:** `actions/deploy-pages`.
-- **Job `keepalive`:** GitHub schaltet geplante Läufe bei öffentlichen Repos nach 60 Tagen ohne Aktivität ab. Ist der letzte Commit ≥ 50 Tage alt, wird ein leerer Commit gepusht (Job-Berechtigung `contents: write`).
 - Workflow-Berechtigungen: `contents: read`, `pages: write`, `id-token: write`.
 
 ## 6. Die App (`site/`): reines JavaScript, ein Skript, kein Framework
@@ -104,7 +102,7 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
 **Kopf**
 - Datumszeile mit Wochentagen, z. B. „Sa 17. – Sa 24. Okt“ bzw. „Heute · Sa 24. Okt“.
 - Titel, Statistik (Videos · Kanäle · Gesamtdauer · „N neu“).
-- Runde Knöpfe: Darstellung, Merkliste (mit Zähler), Aktualisieren.
+- Runde Knöpfe: Darstellung, Merkliste (mit Zähler), Aktualisieren (öffnet das Menü „Aktualisieren“, s. u.).
 
 **Zeitraum**
 - Knöpfe **„Heute“** (breiter) und **1–7**, jeweils mit Wochentag darunter. Ganze Kalendertage: 0 = heute ab 0 Uhr, 1 = ab gestern 0 Uhr usw. Standard 7, **nicht** gespeichert.
@@ -126,7 +124,7 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
   - **Anzahl**: nach Videoanzahl.
 - **„Kurz gesagt“**-Karte (dunkel, Stern-Symbol, Zusatz „bis gestern“, einklappbar, Zustand gespeichert). Nur bei Zeitraum ≥ 1. Ohne Listen-Filter der Claude-Text, sonst eine einfache Auswertung (Anzahl, aktivste Kanäle) der gefilterten, abgeschlossenen Tage.
 - **Filterzeile:** runder **Such-Knopf** (öffnet Suchfeld mit ×, Suche nach Titel/Kanal, mehrere Wörter, akzent-unabhängig; Treffer klappen auf), „**Gesehene ausblenden**“ (gespeichert), **Dauer**: Alle / unter 15 / 15–30 / über 30 Min.
-- **Veraltet-Warnung** (gelb): tagsüber ab 12 Uhr bei Alter > 4,5 Std., sonst > 12 Std. (Text: „normalerweise stündlich aktualisiert“), mit Tipps (Actions prüfen, ggf. `auth_setup.py` erneut).
+- **Alt-Hinweis** (gelb) ab 3 Std. Alter: „Die Übersicht ist N Std. alt. Neue Videos kommen, wenn du sie abrufst.“ mit Link „Jetzt neue Videos abrufen“ (öffnet das Menü „Aktualisieren“).
 - Unten: „N Kanäle stummgeschaltet · anzeigen“ (stumme Kanäle dann blass mit „stumm“), „Stand: …“, Hinweise zu den Gesten, **Sichern · Wiederherstellen**, App sperren, Datenschutz.
 
 **Videokarte**
@@ -143,8 +141,14 @@ tests/subscriptions.csv, tests/feeds/<channel_id>.xml   erfundene Testdaten
 - Entfernen per Wischen in beide Richtungen.
 
 **Sichern / Wiederherstellen**
-- Download als `abo-uebersicht-sicherung-JJJJ-MM-TT.json` mit `{app, v, exported, data}`: Listen, Farben, Kanal-Zuordnungen inkl. stumm, Merkliste, Gesehen, abgehakte Tage, Sortierungen, eigene Reihenfolgen, Darstellung. **Ohne** Passwort-Schlüssel.
+- Download als `abo-uebersicht-sicherung-JJJJ-MM-TT.json` mit `{app, v, exported, data}`: Listen, Farben, Kanal-Zuordnungen inkl. stumm, Merkliste, Gesehen, abgehakte Tage, Sortierungen, eigene Reihenfolgen, Darstellung. **Ohne** Passwort-Schlüssel und GitHub-Token.
 - Wiederherstellen per Dateiauswahl, mit Prüfung (falsche Datei → Hinweis) und Rückgängig.
+
+**Aktualisieren / Neue Videos abrufen**
+- Der Knopf öffnet ein Bottom-Sheet mit „Stand: … (vor N Std.)“, **Neue Videos abrufen** und **Nur neu laden** (lädt nur `data.json` neu).
+- „Neue Videos abrufen“ startet den Workflow per `POST https://api.github.com/repos/<repo>/actions/workflows/update.yml/dispatches` mit `{"ref":"main"}`, fragt danach alle 8 s `…/runs?event=workflow_dispatch&per_page=1` ab (wartet / läuft / fertig) und lädt nach Erfolg `data.json` neu, bis zu 3-mal im Abstand von 10 s, falls Pages noch den alten Stand liefert. Der Knopf oben dreht sich, solange es läuft. Fehler verständlich anzeigen: Token ungültig oder abgelaufen, fehlende Berechtigung, Lauf fehlgeschlagen (mit Tipp zu `auth_setup.py` bei „Google-Login fehlgeschlagen“) oder abgebrochen, jeweils mit Link zum Lauf.
+- Repo aus der Pages-Adresse ableiten (`<besitzer>.github.io/<repo>/`). Unter einer anderen Adresse (z. B. lokal) nur der Hinweis „geht nur in der veröffentlichten App“.
+- Einmalig einen **Fine-grained Token** einfügen (nur dieses Repo, *Actions: Read and write*), mit kurzer Anleitung im Sheet. Format prüfen (`github_pat_…`), dann per `GET …/actions/workflows/update.yml` testen. Speichern als `abo.ghToken` **nur auf dem Gerät**, nicht in der Sicherung. „GitHub-Token ändern“ und „… entfernen“.
 
 **Barrierefreiheit:** echte `<button>`/`<a>`, `aria-pressed`/`aria-expanded`, `aria-label` an Symbol-Knöpfen, sichtbarer Fokus, Escape schließt Menüs.
 
@@ -164,6 +168,7 @@ Führe mich danach **Schritt für Schritt** durch die Einrichtung und warte jewe
    - Secrets anlegen: `YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`, `ANTHROPIC_API_KEY`, `APP_PASSWORD` (langes Passwort, z. B. 4–5 zufällige Wörter).
    - Pages-Quelle „GitHub Actions“, dann „Run workflow“ (in der Workflow-Übersicht, **nicht** „Re-run all jobs“, das nutzt alten Code).
 6. **Handy:** Adresse in **Chrome** öffnen (nicht im eingebetteten Browser einer anderen App), ⋮ › „App installieren“, Passwort eingeben.
+7. **Abruf aus der App:** Fine-grained Token nur für dieses Repo mit *Actions: Read and write* anlegen und in der App unter ↻ einfügen. Ohne Token gibt es neue Daten nur über Actions › Run workflow.
 
 Erkläre mir dabei kurz, was öffentlich sichtbar ist (Code, Protokoll-Zahlen, die verschlüsselte Datei) und was nicht (Secrets, Cache, Einstellungen auf dem Handy). Und dass alte Läufe von vor der Verschlüsselung gelöscht werden sollten.
 
@@ -171,8 +176,7 @@ Erkläre mir dabei kurz, was öffentlich sichtbar ist (Code, Protokoll-Zahlen, d
 
 - `build.py` offline mit den Testfeeds laufen lassen, einmal ohne und einmal mit **nachgestellter Claude-Antwort** (normal, abgeschnitten, verweigert, mehrseitige Abo-Liste).
 - Prüfen: Shorts und alte Videos fliegen raus, „Kurz gesagt“ wird pro Tag nur einmal erzeugt und am Folgetag neu, die Verschlüsselung lässt sich in der App mit dem richtigen Passwort öffnen (auch mit Umlauten), ein falsches Passwort wird abgelehnt.
-- Die App im **Handyformat 390 × 844** mit Playwright/Chromium durchklicken: Wischen, Langdruck, Ziehen, Listen, Mehrfachfilter, Merkliste-Sortierungen, Sichern/Wiederherstellen. Hell **und** dunkel ansehen, keine JavaScript-Fehler, kein horizontales Scrollen.
-- Die Zeitlogik des Workflows für Sommer- und Winterzeit und mit Verspätung durchrechnen.
+- Die App im **Handyformat 390 × 844** mit Playwright/Chromium durchklicken: Wischen, Langdruck, Ziehen, Listen, Mehrfachfilter, Merkliste-Sortierungen, Sichern/Wiederherstellen, „Neue Videos abrufen“ mit nachgestellter GitHub-API (Erfolg, Fehlschlag, fehlende Berechtigung, ungültiger Token). Hell **und** dunkel ansehen, keine JavaScript-Fehler, kein horizontales Scrollen.
 - Zum Schluss alles als ZIP liefern. Bei späteren Änderungen immer sagen, **welche Dateien in welchen Ordner** hochgeladen werden müssen.
 
 ## 9. Optional, nur auf Nachfrage
